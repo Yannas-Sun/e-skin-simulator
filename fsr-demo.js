@@ -4,6 +4,7 @@ const demo = {
   col: 8,
   objectSize: 72,
   objectMass: 620,
+  refreshRate: 10,
   auto: false,
   timer: null,
   hardware: null,
@@ -13,8 +14,10 @@ const demo = {
 const svgEl = document.getElementById("fsrCircuit");
 const objectSizeRange = document.getElementById("objectSizeRange");
 const objectMassRange = document.getElementById("objectMassRange");
+const refreshRateRange = document.getElementById("refreshRateRange");
 const objectSizeValue = document.getElementById("objectSizeValue");
 const objectMassValue = document.getElementById("objectMassValue");
+const refreshRateValue = document.getElementById("refreshRateValue");
 const scanState = document.getElementById("scanState");
 const activeCell = document.getElementById("activeCell");
 const fsrResistance = document.getElementById("fsrResistance");
@@ -39,9 +42,9 @@ const layout = {
   adcY: 675,
   adcW: 650,
   adcH: 96,
-  traceX: 1062,
-  traceY: 118,
-  traceW: 190,
+  heatmapX: 1062,
+  heatmapY: 118,
+  heatmapSize: 176,
 };
 
 function svg(tag, attrs = {}) {
@@ -112,6 +115,7 @@ async function requestHardwareState() {
       col: demo.col,
       objectSize: demo.objectSize,
       objectMass: demo.objectMass,
+      refreshRate: demo.refreshRate,
     }),
   });
   demo.hardware = await response.json();
@@ -132,7 +136,7 @@ function drawCircuit() {
   drawArray(root, columns);
   drawAdc(root, columns);
   drawInfoFlow(root);
-  drawClockTrace(root);
+  drawHardwareHeatmap(root);
 
   fsrResistance.textContent = formatOhms(active.fsrOhms);
   adcVoltage.textContent = `${active.nodeVoltage.toFixed(2)} V`;
@@ -140,7 +144,9 @@ function drawCircuit() {
   activeCell.textContent = `R${demo.objectRow},C${demo.col}`;
   objectSizeValue.textContent = `${demo.objectSize} mm`;
   objectMassValue.textContent = `${demo.objectMass} g`;
+  refreshRateValue.textContent = `${demo.refreshRate} Hz`;
   scanState.textContent = demo.auto ? "auto scan" : "manual";
+  svgEl.classList.toggle("no-animation", demo.refreshRate > 10);
   spiFrame.textContent = [
     `ROW_SELECT = ${demo.hardware.address.value.toString(2).padStart(4, "0")}  // A1-A4`,
     `OBJECT = R${demo.objectRow},C${demo.col}  SIZE = ${demo.objectSize} mm  MASS = ${demo.objectMass} g`,
@@ -203,7 +209,8 @@ function drawArray(root, columns) {
     for (let col = 1; col <= 16; col += 1) {
       const x = colX(col);
       const y = rowY(row);
-      const covered = objectCoversCell(row, col);
+      const sample = hardwareCell(row, col);
+      const covered = sample && sample.active;
       const detected = demo.auto && row === demo.row && covered;
       root.appendChild(svg("rect", {
         x: x - 10,
@@ -255,22 +262,30 @@ function drawSpiBus(root) {
   }
 }
 
-function drawClockTrace(root) {
-  const rows = demo.hardware.clockTrace || [];
-  const x = layout.traceX;
-  const y = layout.traceY;
-  root.appendChild(svg("rect", { x, y, width: layout.traceW, height: 402, rx: 6, class: "clock-panel" }));
-  addText(root, "MCU clk I/O", x + 10, y + 22, { class: "clock-title" });
-  addText(root, "clk A1-A4 MOSI(bin) MISO(bin)", x + 10, y + 44, { class: "clock-head" });
-  const visibleRows = demo.auto ? rows : rows.filter((row) => row.row === demo.row);
-  for (let i = 0; i < visibleRows.length; i += 1) {
-    const item = visibleRows[i];
-    const rowY = y + 64 + i * 20;
-    const active = item.row === demo.row;
-    addText(root, `${String(item.clk).padStart(2, "0")}  ${item.address}`, x + 10, rowY, { class: active ? "clock-row active-label" : "clock-row" });
-    addText(root, item.mosi, x + 66, rowY, { class: active ? "clock-row active-label" : "clock-row" });
-    addText(root, item.miso, x + 118, rowY, { class: active ? "clock-row active-label" : "clock-row" });
+function drawHardwareHeatmap(root) {
+  const matrix = demo.hardware.scanMatrix || [];
+  const x0 = layout.heatmapX;
+  const y0 = layout.heatmapY;
+  const cell = layout.heatmapSize / 16;
+  root.appendChild(svg("rect", { x: x0 - 10, y: y0 - 30, width: layout.heatmapSize + 20, height: layout.heatmapSize + 54, rx: 6, class: "heatmap-panel" }));
+  addText(root, "Hardware heatmap", x0, y0 - 10, { class: "clock-title" });
+  for (let row = 1; row <= 16; row += 1) {
+    for (let col = 1; col <= 16; col += 1) {
+      const sample = matrix[row - 1]?.[col - 1] || { code: 0 };
+      const normalized = Math.max(0, Math.min(1, sample.code / 4095));
+      const hue = 205 - normalized * 205;
+      const lightness = 94 - normalized * 44;
+      root.appendChild(svg("rect", {
+        x: x0 + (col - 1) * cell,
+        y: y0 + (row - 1) * cell,
+        width: cell - 1,
+        height: cell - 1,
+        class: row === demo.row && sample.active ? "heatmap-cell active-scan" : "heatmap-cell",
+        fill: `hsl(${hue}, 78%, ${lightness}%)`,
+      }));
+    }
   }
+  addText(root, `scan row R${demo.row}`, x0, y0 + layout.heatmapSize + 22, { class: "clock-head" });
 }
 
 function drawPressureObject(root) {
@@ -298,9 +313,8 @@ function colX(col) {
   return layout.arrayX + 42 + (col - 1) * 40;
 }
 
-function objectCoversCell(row, col) {
-  const halfSide = demo.objectSize / 2;
-  return Math.abs(colX(col) - colX(demo.col)) <= halfSide && Math.abs(rowY(row) - rowY(demo.objectRow)) <= halfSide;
+function hardwareCell(row, col) {
+  return demo.hardware.scanMatrix?.[row - 1]?.[col - 1] || null;
 }
 
 function clamp(value, min, max) {
@@ -360,6 +374,8 @@ async function updateDemo() {
 function syncFromControls() {
   demo.objectSize = Number(objectSizeRange.value);
   demo.objectMass = Number(objectMassRange.value);
+  demo.refreshRate = Number(refreshRateRange.value);
+  restartAutoScanTimer();
   updateDemo();
 }
 
@@ -371,16 +387,20 @@ function stepRow() {
 function toggleAutoScan() {
   demo.auto = !demo.auto;
   document.getElementById("autoScan").classList.toggle("active", demo.auto);
-  if (demo.auto) {
-    demo.timer = window.setInterval(stepRow, 520);
-  } else {
-    window.clearInterval(demo.timer);
-  }
+  restartAutoScanTimer();
   updateDemo();
+}
+
+function restartAutoScanTimer() {
+  if (demo.timer) window.clearInterval(demo.timer);
+  demo.timer = null;
+  if (!demo.auto) return;
+  demo.timer = window.setInterval(stepRow, Math.max(1, 1000 / demo.refreshRate));
 }
 
 objectSizeRange.addEventListener("input", syncFromControls);
 objectMassRange.addEventListener("input", syncFromControls);
+refreshRateRange.addEventListener("input", syncFromControls);
 svgEl.addEventListener("pointerdown", beginObjectPlacement);
 window.addEventListener("pointermove", updateObjectPlacement);
 window.addEventListener("pointerup", endObjectPlacement);

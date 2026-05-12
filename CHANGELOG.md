@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-05-12 - Hardware Heatmap Refresh
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Moved FSR detection display data fully onto the hardware simulator output.
+   - The Python hardware scan now returns a full 16 x 16 ADC scan matrix.
+   - FSR cell colors and the heatmap are driven by this returned hardware matrix instead of frontend geometry checks.
+
+2. **[Feature]** Added FSR refresh-rate control.
+   - Refresh rate is adjustable up to 700 Hz.
+   - Animation effects are disabled automatically above 10 Hz.
+
+3. **[Appearance]** Replaced the right-side clock trace with a hardware heatmap.
+   - The heatmap visualizes simulated ADC codes from the hardware scan matrix.
+
 ## 2026-05-12 - FSR Object Footprint Alignment
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

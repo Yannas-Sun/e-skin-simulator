@@ -805,6 +805,22 @@ h2 {
   stroke-width: 1.4;
 }
 
+.heatmap-panel {
+  fill: #fbfdfc;
+  stroke: #c9d7d2;
+  stroke-width: 1.4;
+}
+
+.heatmap-cell {
+  stroke: rgba(21, 32, 31, 0.16);
+  stroke-width: 0.5;
+}
+
+.heatmap-cell.active-scan {
+  stroke: #0a657d;
+  stroke-width: 1.4;
+}
+
 .clock-title {
   fill: var(--ink);
   font-size: 14px;
@@ -823,6 +839,11 @@ h2 {
   stroke-linecap: round;
   stroke-dasharray: 10 8;
   animation: dash-flow 900ms linear infinite;
+}
+
+.fsr-circuit.no-animation .signal-flow {
+  animation: none;
+  stroke-dasharray: none;
 }
 
 .fsr-cell {
