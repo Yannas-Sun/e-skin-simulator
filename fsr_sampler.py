@@ -61,13 +61,6 @@ class FSRReadoutProgram:
             object_size=object_size,
             object_mass=object_mass,
         )
-        scan_matrix = self.scan_matrix(
-            pressed_row=pressed_row,
-            pressed_col=pressed_col,
-            object_size=object_size,
-            object_mass=object_mass,
-        )
-
         return {
             "row": self.dmux.selected_row,
             "objectRow": pressed_row,
@@ -91,37 +84,7 @@ class FSRReadoutProgram:
             },
             "spi": spi_frame,
             "clockTrace": clock_trace,
-            "scanMatrix": scan_matrix,
         }
-
-    def scan_matrix(self, pressed_row: int, pressed_col: int, object_size: float, object_mass: float) -> list[list[dict]]:
-        matrix = []
-        saved_row = self.dmux.selected_row
-        for row in range(1, self.dmux.outputs + 1):
-            self.dmux.set_selected_row(row)
-            nodes = self.array.read_row(
-                dmux=self.dmux,
-                pressed_row=pressed_row,
-                pressed_col=pressed_col,
-                object_size=object_size,
-                object_mass=object_mass,
-            )
-            samples = self.adc.sample_parallel([node["nodeVoltage"] for node in nodes])
-            matrix.append(
-                [
-                    {
-                        "row": row,
-                        "col": node["col"],
-                        "force": node["force"],
-                        "voltage": node["nodeVoltage"],
-                        "code": sample["code"],
-                        "active": node["active"],
-                    }
-                    for node, sample in zip(nodes, samples)
-                ]
-            )
-        self.dmux.set_selected_row(saved_row)
-        return matrix
 
     def clock_trace(self, pressed_row: int, pressed_col: int, object_size: float, object_mass: float) -> list[dict]:
         trace = []

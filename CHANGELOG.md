@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-05-12 - MISO-Driven FSR Heatmap
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Changed the FSR heatmap to update only from transmitted MISO data.
+   - The Python API no longer sends a full hidden 16 x 16 scan matrix.
+   - The frontend updates one heatmap row only after receiving that row's SPI/MISO ADC words.
+
+2. **[Logic]** Removed frontend object-position inference from detection display.
+   - FSR colors now come from cached received ADC codes, not from object placement geometry.
+   - Moving or resizing the object clears the received-data cache until new MISO frames arrive.
+
 ## 2026-05-12 - Hardware Heatmap Refresh
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

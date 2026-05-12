@@ -9,6 +9,7 @@ const demo = {
   timer: null,
   hardware: null,
   placingObject: false,
+  receivedCodes: Array.from({ length: 16 }, () => Array(16).fill(null)),
 };
 
 const svgEl = document.getElementById("fsrCircuit");
@@ -119,6 +120,7 @@ async function requestHardwareState() {
     }),
   });
   demo.hardware = await response.json();
+  receiveMisoFrame(demo.hardware);
 }
 
 function drawCircuit() {
@@ -209,9 +211,9 @@ function drawArray(root, columns) {
     for (let col = 1; col <= 16; col += 1) {
       const x = colX(col);
       const y = rowY(row);
-      const sample = hardwareCell(row, col);
-      const covered = sample && sample.active;
-      const detected = demo.auto && row === demo.row && covered;
+      const code = receivedCode(row, col);
+      const covered = code !== null && code > 230;
+      const detected = row === demo.row && covered;
       root.appendChild(svg("rect", {
         x: x - 10,
         y: y - 8,
@@ -263,7 +265,6 @@ function drawSpiBus(root) {
 }
 
 function drawHardwareHeatmap(root) {
-  const matrix = demo.hardware.scanMatrix || [];
   const x0 = layout.heatmapX;
   const y0 = layout.heatmapY;
   const cell = layout.heatmapSize / 16;
@@ -271,16 +272,16 @@ function drawHardwareHeatmap(root) {
   addText(root, "Hardware heatmap", x0, y0 - 10, { class: "clock-title" });
   for (let row = 1; row <= 16; row += 1) {
     for (let col = 1; col <= 16; col += 1) {
-      const sample = matrix[row - 1]?.[col - 1] || { code: 0 };
-      const normalized = Math.max(0, Math.min(1, sample.code / 4095));
+      const code = receivedCode(row, col);
+      const normalized = code === null ? 0 : Math.max(0, Math.min(1, code / 4095));
       const hue = 205 - normalized * 205;
-      const lightness = 94 - normalized * 44;
+      const lightness = code === null ? 97 : 94 - normalized * 44;
       root.appendChild(svg("rect", {
         x: x0 + (col - 1) * cell,
         y: y0 + (row - 1) * cell,
         width: cell - 1,
         height: cell - 1,
-        class: row === demo.row && sample.active ? "heatmap-cell active-scan" : "heatmap-cell",
+        class: row === demo.row && code !== null ? "heatmap-cell active-scan" : "heatmap-cell",
         fill: `hsl(${hue}, 78%, ${lightness}%)`,
       }));
     }
@@ -313,8 +314,19 @@ function colX(col) {
   return layout.arrayX + 42 + (col - 1) * 40;
 }
 
-function hardwareCell(row, col) {
-  return demo.hardware.scanMatrix?.[row - 1]?.[col - 1] || null;
+function receivedCode(row, col) {
+  return demo.receivedCodes[row - 1]?.[col - 1] ?? null;
+}
+
+function receiveMisoFrame(hardware) {
+  const rowIndex = hardware.row - 1;
+  const words = hardware.spi?.words || [];
+  if (rowIndex < 0 || rowIndex >= 16 || words.length !== 16) return;
+  demo.receivedCodes[rowIndex] = words.slice(0, 16);
+}
+
+function clearReceivedHeatmap() {
+  demo.receivedCodes = Array.from({ length: 16 }, () => Array(16).fill(null));
 }
 
 function clamp(value, min, max) {
@@ -338,6 +350,7 @@ function placeObjectFromPoint(point) {
   const row = clamp(Math.round((point.y - (layout.arrayY + 28)) / 23) + 1, 1, 16);
   demo.objectRow = row;
   demo.col = col;
+  clearReceivedHeatmap();
   updateDemo();
 }
 
@@ -375,6 +388,7 @@ function syncFromControls() {
   demo.objectSize = Number(objectSizeRange.value);
   demo.objectMass = Number(objectMassRange.value);
   demo.refreshRate = Number(refreshRateRange.value);
+  clearReceivedHeatmap();
   restartAutoScanTimer();
   updateDemo();
 }
