@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-05-12 - FSR Pressure Object Scan
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Feature]** Added object placement on the FSR demo array.
+   - Users can click or drag on the 16 x 16 FSR array to place the pressure object.
+   - Auto scan now sweeps rows while reading pressure from the placed object position.
+
+2. **[Logic]** Separated scanned row from object row in the Python sampler.
+   - `/api/fsr-readout` now accepts `objectRow` independently from the selected scan row.
+   - The per-clock scan trace reports changing MOSI read commands and MISO ADC words.
+
+3. **[Appearance]** Fixed remaining floating bus lines.
+   - A4 now terminates inside the DMUX address area.
+   - SCK and the other SPI lines now enter the ADC body instead of stopping above it.
+
 ## 2026-05-12 - Dashboard Occupancy and FSR Clock I/O
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

@@ -180,6 +180,7 @@ class Handler(SimpleHTTPRequestHandler):
             row=int(payload.get("row", 1)),
             col=int(payload.get("col", 8)),
             force=float(payload.get("force", 62)),
+            object_row=int(payload.get("objectRow", payload.get("row", 1))),
         )
         self.write_json(response)
 

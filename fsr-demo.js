@@ -1,10 +1,12 @@
 const demo = {
   row: 1,
+  objectRow: 8,
   col: 8,
   force: 62,
   auto: false,
   timer: null,
   hardware: null,
+  placingObject: false,
 };
 
 const svgEl = document.getElementById("fsrCircuit");
@@ -107,6 +109,7 @@ async function requestHardwareState() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       row: demo.row,
+      objectRow: demo.objectRow,
       col: demo.col,
       force: demo.force,
     }),
@@ -134,13 +137,14 @@ function drawCircuit() {
   fsrResistance.textContent = formatOhms(active.fsrOhms);
   adcVoltage.textContent = `${active.nodeVoltage.toFixed(2)} V`;
   adcCode.textContent = String(active.code);
-  activeCell.textContent = `R${demo.row},C${demo.col}`;
+  activeCell.textContent = `R${demo.objectRow},C${demo.col}`;
   rowValue.textContent = `R${demo.row}`;
   colValue.textContent = `C${demo.col}`;
   forceValue.textContent = `${demo.force}%`;
   scanState.textContent = demo.auto ? "auto scan" : "manual";
   spiFrame.textContent = [
     `ROW_SELECT = ${demo.hardware.address.value.toString(2).padStart(4, "0")}  // A1-A4`,
+    `OBJECT = R${demo.objectRow},C${demo.col}  FORCE = ${demo.force}%`,
     `ADC_CH[01..16] sampled simultaneously`,
     `ADC_CH[${demo.col.toString().padStart(2, "0")}] = ${active.code.toString().padStart(4, " ")}`,
     ...demo.hardware.spi.lines.map((line) => `${line.name}: ${line.carries}`),
@@ -158,7 +162,7 @@ function drawAddressBus(root) {
   const y1 = layout.dmuxY + layout.dmuxH - 1;
   const y2 = layout.mcuY;
   for (let bit = 0; bit < 4; bit += 1) {
-    const x = layout.mcuX + 42 + bit * 38;
+    const x = layout.dmuxX + 32 + bit * 31;
     const level = addressBit(demo.row, bit);
     line(root, x, y1, x, y2, level ? "logic-wire high" : "logic-wire low");
     addText(root, `A${bit + 1}`, x - 8, y2 - 10, { class: level ? "active-label" : "pin-label" });
@@ -183,6 +187,7 @@ function drawDmux(root) {
 
 function drawArray(root, columns) {
   root.appendChild(svg("rect", { x: layout.arrayX, y: layout.arrayY, width: layout.arrayW, height: layout.arrayH, class: "array-bg" }));
+  root.appendChild(svg("rect", { x: layout.arrayX, y: layout.arrayY, width: layout.arrayW, height: layout.arrayH, class: "array-hit-target" }));
   addText(root, "FSR array: 16 rows x 16 columns", layout.arrayX + layout.arrayW / 2, layout.arrayY - 20, { class: "block-title", "text-anchor": "middle" });
 
   for (let row = 1; row <= 16; row += 1) {
@@ -199,9 +204,9 @@ function drawArray(root, columns) {
     for (let col = 1; col <= 16; col += 1) {
       const x = colX(col);
       const y = rowY(row);
-      const selectedCell = row === demo.row && col === demo.col;
+      const selectedCell = row === demo.objectRow && col === demo.col;
       const column = columns[col - 1];
-      const forceHalo = row === demo.row && column.force > 1;
+      const forceHalo = row === demo.objectRow && column.force > 1;
       root.appendChild(svg("rect", {
         x: x - 10,
         y: y - 8,
@@ -214,10 +219,11 @@ function drawArray(root, columns) {
   }
 
   const x = colX(demo.col);
-  const y = rowY(demo.row);
+  const y = rowY(demo.objectRow);
   resistor(root, x - 32, y - 10, false, "component-line active-component");
-  addText(root, `R${demo.row},${demo.col}`, x + 24, y - 18, { class: "active-label" });
+  addText(root, `R${demo.objectRow},${demo.col}`, x + 24, y - 18, { class: "active-label" });
   addText(root, "FSR", x + 24, y + 22, { class: "active-label" });
+  drawPressureObject(root);
 
   for (let col = 1; col <= 16; col += 1) {
     const cx = colX(col);
@@ -246,7 +252,7 @@ function drawAdc(root, columns) {
 
 function drawSpiBus(root) {
   const lines = demo.hardware.spi.lines;
-  const y0 = layout.mcuY + 24;
+  const y0 = layout.adcY + 18;
   for (let i = 0; i < lines.length; i += 1) {
     const item = lines[i];
     const y = y0 + i * 20;
@@ -262,16 +268,26 @@ function drawClockTrace(root) {
   const y = layout.traceY;
   root.appendChild(svg("rect", { x, y, width: layout.traceW, height: 402, rx: 6, class: "clock-panel" }));
   addText(root, "MCU clk I/O", x + 10, y + 22, { class: "clock-title" });
-  addText(root, "clk A1-A4  ADC in       SPI out", x + 10, y + 44, { class: "clock-head" });
+  addText(root, "clk A1-A4 MOSI    MISO", x + 10, y + 44, { class: "clock-head" });
   const visibleRows = demo.auto ? rows : rows.filter((row) => row.row === demo.row);
   for (let i = 0; i < visibleRows.length; i += 1) {
     const item = visibleRows[i];
     const rowY = y + 64 + i * 20;
     const active = item.row === demo.row;
     addText(root, `${String(item.clk).padStart(2, "0")}  ${item.address}`, x + 10, rowY, { class: active ? "clock-row active-label" : "clock-row" });
-    addText(root, item.adcInput.replace("C1-C16, ", ""), x + 72, rowY, { class: active ? "clock-row active-label" : "clock-row" });
-    addText(root, item.spiOut.replace("MISO", "MI"), x + 138, rowY, { class: active ? "clock-row active-label" : "clock-row" });
+    addText(root, item.mosi, x + 72, rowY, { class: active ? "clock-row active-label" : "clock-row" });
+    addText(root, item.miso, x + 124, rowY, { class: active ? "clock-row active-label" : "clock-row" });
   }
+}
+
+function drawPressureObject(root) {
+  const x = colX(demo.col);
+  const y = rowY(demo.objectRow);
+  const g = svg("g", { class: "pressure-object", transform: `translate(${x} ${y})` });
+  g.appendChild(svg("circle", { cx: 0, cy: 0, r: 18 }));
+  g.appendChild(svg("circle", { cx: 0, cy: 0, r: 7, class: "pressure-core" }));
+  addText(g, "object", 0, -24, { class: "object-label", "text-anchor": "middle" });
+  root.appendChild(g);
 }
 
 function drawInfoFlow(root) {
@@ -290,6 +306,48 @@ function rowY(row) {
 
 function colX(col) {
   return layout.arrayX + 42 + (col - 1) * 40;
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function circuitPoint(event) {
+  const rect = svgEl.getBoundingClientRect();
+  return {
+    x: ((event.clientX - rect.left) / rect.width) * 1280,
+    y: ((event.clientY - rect.top) / rect.height) * 880,
+  };
+}
+
+function pointInArray(point) {
+  return point.x >= layout.arrayX && point.x <= layout.arrayX + layout.arrayW && point.y >= layout.arrayY && point.y <= layout.arrayY + layout.arrayH;
+}
+
+function placeObjectFromPoint(point) {
+  const col = clamp(Math.round((point.x - (layout.arrayX + 42)) / 40) + 1, 1, 16);
+  const row = clamp(Math.round((point.y - (layout.arrayY + 28)) / 23) + 1, 1, 16);
+  demo.objectRow = row;
+  demo.col = col;
+  colSelect.value = demo.col;
+  updateDemo();
+}
+
+function beginObjectPlacement(event) {
+  const point = circuitPoint(event);
+  if (!pointInArray(point)) return;
+  event.preventDefault();
+  demo.placingObject = true;
+  placeObjectFromPoint(point);
+}
+
+function updateObjectPlacement(event) {
+  if (!demo.placingObject) return;
+  placeObjectFromPoint(circuitPoint(event));
+}
+
+function endObjectPlacement() {
+  demo.placingObject = false;
 }
 
 function addStep(root, num, text, x, y) {
@@ -332,6 +390,9 @@ function toggleAutoScan() {
 rowSelect.addEventListener("input", syncFromControls);
 colSelect.addEventListener("input", syncFromControls);
 forceSelect.addEventListener("input", syncFromControls);
+svgEl.addEventListener("pointerdown", beginObjectPlacement);
+window.addEventListener("pointermove", updateObjectPlacement);
+window.addEventListener("pointerup", endObjectPlacement);
 document.getElementById("singleStep").addEventListener("click", stepRow);
 document.getElementById("autoScan").addEventListener("click", toggleAutoScan);
 

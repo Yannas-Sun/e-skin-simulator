@@ -699,6 +699,11 @@ h2 {
   stroke-width: 3;
 }
 
+.array-hit-target {
+  fill: rgba(255, 255, 255, 0);
+  pointer-events: all;
+}
+
 .wire,
 .array-row,
 .array-column,
@@ -751,6 +756,28 @@ h2 {
 .active-node {
   fill: #d69d28;
   stroke: #9f6b00;
+}
+
+.pressure-object {
+  cursor: grab;
+  pointer-events: none;
+}
+
+.pressure-object circle {
+  fill: rgba(215, 87, 69, 0.28);
+  stroke: #9f3d31;
+  stroke-width: 2.2;
+}
+
+.pressure-object .pressure-core {
+  fill: #d75745;
+  stroke: #7f2b22;
+}
+
+.object-label {
+  fill: #9f3d31;
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .logic-wire {
