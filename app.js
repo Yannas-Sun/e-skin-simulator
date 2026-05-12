@@ -5,6 +5,9 @@ const state = {
   selectedObjectId: null,
   nextModuleId: 1,
   nextObjectId: 1,
+  nextPatchId: 1,
+  patches: [],
+  activePatchId: null,
   snap: true,
   drag: null,
   selection: null,
@@ -154,6 +157,43 @@ function nearestValidHoneycombPoint(point) {
   return { x: best.x, y: best.y };
 }
 
+function allocateModuleId() {
+  const used = new Set(state.modules.map((module) => module.id));
+  let id = 1;
+  while (used.has(id)) id += 1;
+  state.nextModuleId = Math.max(state.nextModuleId, id + 1);
+  return id;
+}
+
+function allocatePatchId() {
+  const used = new Set(state.patches.map((patch) => patch.id));
+  let id = 1;
+  while (used.has(id)) id += 1;
+  state.nextPatchId = Math.max(state.nextPatchId, id + 1);
+  return id;
+}
+
+function getPatchModules(patchId) {
+  return state.modules.filter((module) => module.patchId === patchId);
+}
+
+function getMetricModules() {
+  return state.activePatchId ? getPatchModules(state.activePatchId) : state.modules;
+}
+
+function prunePatches() {
+  const existingModuleIds = new Set(state.modules.map((module) => module.id));
+  state.patches = state.patches
+    .map((patch) => ({
+      ...patch,
+      moduleIds: patch.moduleIds.filter((id) => existingModuleIds.has(id) && state.modules.some((module) => module.id === id && module.patchId === patch.id)),
+    }))
+    .filter((patch) => patch.moduleIds.length > 0);
+  if (state.activePatchId && !state.patches.some((patch) => patch.id === state.activePatchId)) {
+    state.activePatchId = null;
+  }
+}
+
 function hexPoints(cx, cy, r) {
   return [0, 60, 120, 180, 240, 300]
     .map((angle) => {
@@ -242,15 +282,73 @@ function renderScene() {
   scene.setAttribute("viewBox", `${world.minX} ${world.minY} ${world.width} ${world.height}`);
   document.querySelector(".workspace-hint").style.display = state.modules.length ? "none" : "block";
 
+  for (const patch of state.patches) {
+    scene.appendChild(renderPatchUnderlay(patch));
+  }
   for (const module of state.modules) {
     scene.appendChild(renderModule(module));
   }
   for (const object of state.objects) {
     scene.appendChild(renderObject(object));
   }
+  for (const patch of state.patches) {
+    scene.appendChild(renderPatchBadge(patch));
+  }
   if (state.selection) {
     scene.appendChild(renderSelectionBox());
   }
+}
+
+function patchBounds(patch) {
+  const modules = getPatchModules(patch.id);
+  if (!modules.length) return null;
+  return modules.reduce(
+    (box, module) => ({
+      minX: Math.min(box.minX, module.x - module.radius - 12),
+      minY: Math.min(box.minY, module.y - module.radius - 12),
+      maxX: Math.max(box.maxX, module.x + module.radius + 12),
+      maxY: Math.max(box.maxY, module.y + module.radius + 24),
+    }),
+    { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity },
+  );
+}
+
+function renderPatchUnderlay(patch) {
+  const bounds = patchBounds(patch);
+  if (!bounds) return svg("g");
+  const active = state.activePatchId === patch.id;
+  const rect = svg("rect", {
+    class: `patch-underlay ${active ? "active" : ""}`,
+    x: bounds.minX,
+    y: bounds.minY,
+    width: bounds.maxX - bounds.minX,
+    height: bounds.maxY - bounds.minY,
+    rx: 14,
+  });
+  rect.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    focusPatch(patch.id);
+  });
+  return rect;
+}
+
+function renderPatchBadge(patch) {
+  const modules = getPatchModules(patch.id);
+  if (!modules.length) return svg("g");
+  const cx = modules.reduce((sum, module) => sum + module.x, 0) / modules.length;
+  const cy = Math.min(...modules.map((module) => module.y - module.radius)) - 22;
+  const g = svg("g", { class: `patch-badge ${state.activePatchId === patch.id ? "active" : ""}`, transform: `translate(${cx} ${cy})` });
+  g.appendChild(svg("rect", { x: -24, y: -13, width: 48, height: 26, rx: 8 }));
+  const label = svg("text", { x: 0, y: 4, "text-anchor": "middle" });
+  label.textContent = `P${patch.id}`;
+  g.appendChild(label);
+  g.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    focusPatch(patch.id);
+  });
+  return g;
 }
 
 function renderModule(module) {
@@ -343,6 +441,10 @@ function normalizedSelectionBox() {
 function beginDrag(event, kind, id) {
   event.preventDefault();
   event.stopPropagation();
+  if (state.activePatchId && (kind !== "module" || !getPatchModules(state.activePatchId).some((module) => module.id === id))) {
+    state.activePatchId = null;
+    simulate();
+  }
   const point = workspacePoint(event);
   const item = kind === "module" ? state.modules.find((module) => module.id === id) : state.objects.find((object) => object.id === id);
   const isAlreadySelected = kind === "module" ? state.selectedModules.has(id) : state.selectedObjects.has(id);
@@ -416,6 +518,7 @@ function endDrag(event) {
 function beginBoxSelection(event) {
   if (event.button !== 0 || event.target !== scene) return;
   const point = workspacePoint(event);
+  state.activePatchId = null;
   clearSelection();
   state.selection = { start: point, current: point };
   state.drag = { kind: "box" };
@@ -470,10 +573,58 @@ function updateSelectionFromBox() {
   state.selectedObjectId = firstObject ? firstObject.id : null;
 }
 
+function makePatchFromSelection() {
+  const selected = state.modules.filter((module) => state.selectedModules.has(module.id));
+  if (!selected.length) return;
+  const patchId = allocatePatchId();
+  const selectedIds = selected.map((module) => module.id);
+
+  for (const module of selected) {
+    module.patchId = patchId;
+  }
+  for (const patch of state.patches) {
+    patch.moduleIds = patch.moduleIds.filter((id) => !selectedIds.includes(id));
+  }
+  state.patches.push({ id: patchId, moduleIds: selectedIds });
+  prunePatches();
+  focusPatch(patchId);
+}
+
+function focusPatch(patchId) {
+  const modules = getPatchModules(patchId);
+  if (!modules.length) return;
+  state.activePatchId = patchId;
+  fitViewToModules(modules);
+  renderGrid();
+  renderScene();
+  simulate();
+}
+
+function fitViewToModules(modules) {
+  const rect = workspace.getBoundingClientRect();
+  const bounds = modules.reduce(
+    (box, module) => ({
+      minX: Math.min(box.minX, module.x - module.radius - 36),
+      minY: Math.min(box.minY, module.y - module.radius - 48),
+      maxX: Math.max(box.maxX, module.x + module.radius + 36),
+      maxY: Math.max(box.maxY, module.y + module.radius + 48),
+    }),
+    { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity },
+  );
+  const spanX = Math.max(1, bounds.maxX - bounds.minX);
+  const spanY = Math.max(1, bounds.maxY - bounds.minY);
+  state.zoom = Math.max(0.45, Math.min(2.8, Math.min(rect.width / spanX, rect.height / spanY)));
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerY = (bounds.minY + bounds.maxY) / 2;
+  state.panX = rect.width / 2 - centerX * state.zoom;
+  state.panY = rect.height / 2 - centerY * state.zoom;
+}
+
 function deleteSelection() {
   if (!state.selectedModules.size && !state.selectedObjects.size) return;
   state.modules = state.modules.filter((module) => !state.selectedModules.has(module.id));
   state.objects = state.objects.filter((object) => !state.selectedObjects.has(object.id));
+  prunePatches();
   clearSelection();
   renderScene();
   simulate();
@@ -515,15 +666,15 @@ function pasteSelection() {
   }
 
   for (const source of state.clipboard.modules) {
+    const id = allocateModuleId();
     const module = {
-      id: state.nextModuleId,
+      id,
       x: source.x + dx,
       y: source.y + dy,
       radius: source.radius,
     };
     state.modules.push(module);
     state.selectedModules.add(module.id);
-    state.nextModuleId += 1;
   }
 
   for (const source of state.clipboard.objects) {
@@ -548,12 +699,12 @@ function pasteSelection() {
 function createModule(point) {
   const next = nearestValidHoneycombPoint(point);
   state.modules.push({
-    id: state.nextModuleId,
+    id: allocateModuleId(),
     x: next.x,
     y: next.y,
     radius: HEX_RADIUS,
   });
-  state.nextModuleId += 1;
+  state.activePatchId = null;
   renderScene();
   simulate();
 }
@@ -569,6 +720,7 @@ function createObject(point, shape = state.selectedShape) {
   };
   state.objects.push(object);
   state.nextObjectId += 1;
+  state.activePatchId = null;
   selectObject(object.id);
   renderScene();
   simulate();
@@ -577,6 +729,7 @@ function createObject(point, shape = state.selectedShape) {
 function selectObject(id) {
   const object = state.objects.find((item) => item.id === id);
   if (!object) return;
+  state.activePatchId = null;
   if (!state.selectedObjects.has(id)) {
     clearSelection();
     state.selectedObjects.add(id);
@@ -635,8 +788,9 @@ function scheduleSimulation() {
 }
 
 async function simulate() {
+  const metricModules = getMetricModules();
   const payload = {
-    modules: state.modules,
+    modules: metricModules,
     objects: state.objects,
     samplingHz: state.samplingHz,
   };
@@ -649,7 +803,7 @@ async function simulate() {
     const result = await response.json();
     state.lastPressure = new Map(result.pressure.cells.map((cell) => [cell.id, cell.values]));
     renderScene();
-    renderHeatmap(result.pressure.cells);
+    renderHeatmap(result.pressure.cells, metricModules);
     updateMetrics(result);
   } catch (error) {
     linkNote.textContent = "Python backend is not reachable. Start it with: python server.py";
@@ -693,7 +847,7 @@ function pointInHexLocal(x, y, r) {
   return Math.abs(x) <= r && Math.abs(y) <= Math.sqrt(3) * r / 2 && Math.sqrt(3) * Math.abs(x) + Math.abs(y) <= Math.sqrt(3) * r;
 }
 
-function renderHeatmap(cells) {
+function renderHeatmap(cells, sourceModules = getMetricModules()) {
   const w = heatmap.width;
   const h = heatmap.height;
   hctx.clearRect(0, 0, w, h);
@@ -704,12 +858,12 @@ function renderHeatmap(cells) {
     hctx.fillStyle = "#8a9691";
     hctx.font = "15px system-ui";
     hctx.textAlign = "center";
-    hctx.fillText("assemble modules to see pressure", w / 2, h / 2);
+    hctx.fillText(state.activePatchId ? "selected patch has no modules" : "assemble modules to see pressure", w / 2, h / 2);
     return;
   }
 
   const pressureById = new Map(cells.map((cell) => [cell.id, cell.values]));
-  const modules = state.modules.filter((module) => pressureById.has(module.id));
+  const modules = sourceModules.filter((module) => pressureById.has(module.id));
   if (!modules.length) return;
 
   const bounds = modules.reduce(
@@ -795,7 +949,8 @@ function updateMetrics(result) {
   throughputBits.textContent = `${result.throughput.megabitsPerSecond.toFixed(1)} Mb/s`;
   linkUse.style.width = `${result.throughput.utilization.toFixed(1)}%`;
   linkState.textContent = result.throughput.link;
-  linkNote.textContent = `${result.throughput.patches} patch(es), ${result.throughput.utilization.toFixed(1)}% link use at ${state.samplingHz} Hz.`;
+  const scope = state.activePatchId ? `Focused P${state.activePatchId}: ` : "";
+  linkNote.textContent = `${scope}${result.throughput.patches} patch(es), ${result.throughput.utilization.toFixed(1)}% link use at ${state.samplingHz} Hz.`;
 }
 
 function setupDnD() {
@@ -842,10 +997,13 @@ function setupControls() {
   });
   document.getElementById("copySelection").addEventListener("click", copySelection);
   document.getElementById("pasteSelection").addEventListener("click", pasteSelection);
+  document.getElementById("makePatch").addEventListener("click", makePatchFromSelection);
   document.getElementById("deleteSelection").addEventListener("click", deleteSelection);
   document.getElementById("resetView").addEventListener("click", () => {
     state.modules = [];
     state.objects = [];
+    state.patches = [];
+    state.activePatchId = null;
     clearSelection();
     state.lastPressure = new Map();
     renderScene();
@@ -866,6 +1024,12 @@ function setupControls() {
     if (event.key === "Delete" || event.key === "Backspace") {
       event.preventDefault();
       deleteSelection();
+      return;
+    }
+    if (event.key === "Escape" && state.activePatchId) {
+      state.activePatchId = null;
+      renderScene();
+      simulate();
     }
   });
   window.addEventListener("resize", () => {

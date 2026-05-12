@@ -20,6 +20,9 @@ The simulator is intended as an early design and communication tool rather than 
 - Assemble modules into arbitrary edge-aligned networks
 - Box-select multiple modules or test objects
 - Move, copy, paste, and delete selected items
+- Combine selected modules into a patch
+- Click a patch label or outline to focus the workspace view on that patch
+- Show heatmap and throughput data for the focused patch until another item is selected
 - Drag test objects onto the module network
 - Choose object shape: circle, square, or triangle
 - Adjust object size and mass

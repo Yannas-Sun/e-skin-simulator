@@ -484,6 +484,45 @@ h2 {
   pointer-events: none;
 }
 
+.patch-underlay {
+  fill: rgba(214, 157, 40, 0.08);
+  stroke: rgba(214, 157, 40, 0.52);
+  stroke-dasharray: 9 7;
+  stroke-width: 2;
+  cursor: zoom-in;
+}
+
+.patch-underlay.active {
+  fill: rgba(214, 157, 40, 0.16);
+  stroke: #d69d28;
+  stroke-width: 3;
+}
+
+.patch-badge {
+  cursor: zoom-in;
+}
+
+.patch-badge rect {
+  fill: #fff8e5;
+  stroke: #d69d28;
+  stroke-width: 1.6;
+}
+
+.patch-badge.active rect {
+  fill: #d69d28;
+}
+
+.patch-badge text {
+  fill: #5f4615;
+  font-size: 12px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.patch-badge.active text {
+  fill: #fffdf6;
+}
+
 .sim-object {
   cursor: move;
 }
