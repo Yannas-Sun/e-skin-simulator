@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FSR Readout Demo</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="demo-body">
+    <main class="demo-shell">
+      <header class="demo-header">
+        <div>
+          <p class="eyebrow">Hardware readout demo</p>
+          <h1>16 x 16 FSR Array: DMUX to ADC to MCU</h1>
+          <p>
+            A row-select demultiplexer energizes one FSR row at a time. The 16 columns form voltage dividers
+            through 10 kOhm pull-down resistors, the ADC samples all columns, and the MCU receives the frame over SPI.
+          </p>
+        </div>
+        <a class="text-button link-button" href="index.html">Back to Dashboard</a>
+      </header>
+
+      <section class="demo-grid">
+        <aside class="demo-controls panel-section">
+          <div class="section-title">
+            <h2>Scan Controls</h2>
+            <span id="scanState">manual</span>
+          </div>
+          <label>
+            <span>Selected row</span>
+            <input id="rowSelect" type="range" min="1" max="16" value="1" />
+            <output id="rowValue">R1</output>
+          </label>
+          <label>
+            <span>Pressed column</span>
+            <input id="colSelect" type="range" min="1" max="16" value="8" />
+            <output id="colValue">C8</output>
+          </label>
+          <label>
+            <span>Force</span>
+            <input id="forceSelect" type="range" min="0" max="100" value="62" />
+            <output id="forceValue">62%</output>
+          </label>
+          <button id="autoScan" class="text-button" type="button">Auto Scan</button>
+          <button id="singleStep" class="text-button" type="button">Step Row</button>
+        </aside>
+
+        <section class="circuit-panel">
+          <svg id="fsrCircuit" class="fsr-circuit" viewBox="0 0 1220 720" role="img" aria-label="FSR readout circuit demo"></svg>
+        </section>
+
+        <aside class="readout-panel">
+          <div class="panel-section">
+            <div class="section-title">
+              <h2>Current Reading</h2>
+              <span id="activeCell">R1,C8</span>
+            </div>
+            <div class="readout-stack">
+              <div>
+                <span>FSR resistance</span>
+                <strong id="fsrResistance">14.4 kOhm</strong>
+              </div>
+              <div>
+                <span>ADC column voltage</span>
+                <strong id="adcVoltage">1.35 V</strong>
+              </div>
+              <div>
+                <span>ADC code, 12-bit</span>
+                <strong id="adcCode">1676</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-section">
+            <div class="section-title">
+              <h2>SPI Frame</h2>
+              <span>ADC -> MCU</span>
+            </div>
+            <pre id="spiFrame" class="spi-frame"></pre>
+          </div>
+
+          <div class="panel-section module-info">
+            <div class="section-title">
+              <h2>Readout Logic</h2>
+              <span>one row per step</span>
+            </div>
+            <ul>
+              <li>MCU sets the DMUX address lines.</li>
+              <li>DMUX drives one row electrode with Vcc.</li>
+              <li>Each column is pulled to ground through 10 kOhm.</li>
+              <li>Pressed FSR cells reduce resistance and raise column voltage.</li>
+              <li>ADC samples C1-C16 in parallel and returns values via SPI.</li>
+            </ul>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <script src="fsr-demo.js"></script>
+  </body>
+</html>

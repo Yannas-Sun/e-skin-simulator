@@ -30,6 +30,7 @@ The simulator is intended as an early design and communication tool rather than 
 - Display a live pressure heatmap matching the assembled module topology
 - Show module IDs on the heatmap
 - Estimate real-time data throughput and Ethernet link use
+- Open an FSR readout demo showing DMUX row selection, 16 x 16 FSR voltage-divider readout, 16-channel ADC sampling, and SPI transfer back to the MCU
 
 ## Running
 
@@ -62,11 +63,14 @@ Use the HTTP address above rather than opening `index.html` directly, because th
    - `Ctrl+C`
    - `Ctrl+V`
    - `Delete` / `Backspace`
+8. Click `FSR Demo` to inspect the hardware readout path for one 16 x 16 FSR layer.
 
 ## Files
 
 - `server.py` - Python HTTP server and simulation API
 - `index.html` - application layout
+- `fsr-demo.html` - interactive FSR readout circuit demo
 - `styles.css` - user interface styling
 - `app.js` - workspace interaction, rendering, and API calls
+- `fsr-demo.js` - DMUX, FSR, ADC, and MCU readout visualization logic
 - `E_skin_plan_report.pdf` - source planning report and project background
