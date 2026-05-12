@@ -151,23 +151,19 @@ function drawMcu(root) {
 }
 
 function drawAddressBus(root) {
-  const startX = layout.mcuX + 42;
-  const endX = layout.dmuxX + 34;
-  const y1 = layout.mcuY;
-  const y2 = layout.dmuxY + layout.dmuxH;
+  const y1 = layout.dmuxY + layout.dmuxH;
+  const y2 = layout.mcuY;
   for (let bit = 0; bit < 4; bit += 1) {
-    const x1 = startX + bit * 42;
-    const x2 = endX + bit * 24;
+    const x = layout.mcuX + 42 + bit * 38;
     const level = addressBit(demo.row, bit);
-    line(root, x1, y1, x2, y2, level ? "logic-wire high" : "logic-wire low");
-    addText(root, `A${bit + 1}`, x1 - 8, y1 - 10, { class: level ? "active-label" : "pin-label" });
+    line(root, x, y1, x, y2, level ? "logic-wire high" : "logic-wire low");
+    addText(root, `A${bit + 1}`, x - 8, y2 - 10, { class: level ? "active-label" : "pin-label" });
   }
 }
 
 function drawDmux(root) {
   root.appendChild(svg("rect", { x: layout.dmuxX, y: layout.dmuxY, width: layout.dmuxW, height: layout.dmuxH, rx: 7, class: "block dmux" }));
   addText(root, "DMUX", layout.dmuxX + layout.dmuxW / 2, layout.dmuxY - 22, { class: "block-title", "text-anchor": "middle" });
-  addText(root, "Select", layout.dmuxX - 18, layout.dmuxY + layout.dmuxH + 38, { class: "small-label" });
   for (const rowState of demo.hardware.dmuxRows) {
     const row = rowState.row;
     const y = rowY(row);
@@ -179,8 +175,6 @@ function drawDmux(root) {
     drawDiode(root, diodeX, y, active ? "diode active-diode" : "diode");
     line(root, diodeX + 10, y, layout.arrayX, y, active ? "wire active-wire" : "wire ground-wire");
   }
-  addText(root, "Only selected row = Vcc", layout.dmuxX - 8, layout.dmuxY + layout.dmuxH + 66, { class: "small-label" });
-  addText(root, "Other rows = GND", layout.dmuxX - 8, layout.dmuxY + layout.dmuxH + 86, { class: "small-label" });
 }
 
 function drawArray(root, columns) {
@@ -230,9 +224,8 @@ function drawArray(root, columns) {
     line(root, cx, nodeY, cx, layout.adcY, col === demo.col ? "wire active-wire" : "wire sample-wire");
     line(root, cx, nodeY, resistorX, nodeY, col === demo.col ? "wire active-wire" : "wire");
     resistor(root, resistorX, nodeY, true, col === demo.col ? "component-line active-component" : "component-line");
-    drawGround(root, resistorX, nodeY + 64);
+    drawGround(root, resistorX, nodeY + 56);
   }
-  addText(root, "ADC samples high-impedance column nodes; each node has a 10 kOhm load to GND", layout.arrayX + layout.arrayW / 2, layout.adcY - 12, { class: "small-label", "text-anchor": "middle" });
 }
 
 function drawAdc(root, columns) {
@@ -243,7 +236,6 @@ function drawAdc(root, columns) {
     line(root, x, layout.adcY - 22, x, layout.adcY, item.col === demo.col ? "wire active-wire" : "wire sample-wire");
   }
   drawSpiBus(root);
-  addText(root, "C1-C16 sampled in parallel", layout.adcX + layout.adcW - 18, layout.adcY - 18, { class: "active-label", "text-anchor": "end" });
 }
 
 function drawSpiBus(root) {
