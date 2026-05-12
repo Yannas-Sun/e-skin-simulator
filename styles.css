@@ -772,6 +772,25 @@ h2 {
   vector-effect: non-scaling-stroke;
 }
 
+.clock-panel {
+  fill: #fbfdfc;
+  stroke: #c9d7d2;
+  stroke-width: 1.4;
+}
+
+.clock-title {
+  fill: var(--ink);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.clock-head,
+.clock-row {
+  fill: #53605c;
+  font-family: Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
+}
+
 .signal-flow {
   fill: none;
   stroke-linecap: round;

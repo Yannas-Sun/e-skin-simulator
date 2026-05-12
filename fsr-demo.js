@@ -38,6 +38,9 @@ const layout = {
   adcY: 675,
   adcW: 650,
   adcH: 96,
+  traceX: 1062,
+  traceY: 118,
+  traceW: 190,
 };
 
 function svg(tag, attrs = {}) {
@@ -126,6 +129,7 @@ function drawCircuit() {
   drawArray(root, columns);
   drawAdc(root, columns);
   drawInfoFlow(root);
+  drawClockTrace(root);
 
   fsrResistance.textContent = formatOhms(active.fsrOhms);
   adcVoltage.textContent = `${active.nodeVoltage.toFixed(2)} V`;
@@ -151,7 +155,7 @@ function drawMcu(root) {
 }
 
 function drawAddressBus(root) {
-  const y1 = layout.dmuxY + layout.dmuxH;
+  const y1 = layout.dmuxY + layout.dmuxH - 1;
   const y2 = layout.mcuY;
   for (let bit = 0; bit < 4; bit += 1) {
     const x = layout.mcuX + 42 + bit * 38;
@@ -219,12 +223,14 @@ function drawArray(root, columns) {
     const cx = colX(col);
     const nodeY = layout.adcY - 118;
     const resistorX = cx + 14;
+    const bottomY = nodeY + 56;
     root.appendChild(svg("circle", { cx, cy: nodeY, r: 4, class: col === demo.col ? "sample-node active-node" : "sample-node" }));
     line(root, cx, layout.arrayY + layout.arrayH, cx, nodeY, col === demo.col ? "wire active-wire" : "wire sample-wire");
     line(root, cx, nodeY, cx, layout.adcY, col === demo.col ? "wire active-wire" : "wire sample-wire");
     line(root, cx, nodeY, resistorX, nodeY, col === demo.col ? "wire active-wire" : "wire");
     resistor(root, resistorX, nodeY, true, col === demo.col ? "component-line active-component" : "component-line");
-    drawGround(root, resistorX, nodeY + 56);
+    line(root, resistorX, bottomY, resistorX, bottomY + 1, col === demo.col ? "active-component" : "component-line");
+    drawGround(root, resistorX, bottomY);
   }
 }
 
@@ -233,7 +239,7 @@ function drawAdc(root, columns) {
   addText(root, "16-channel ADC", layout.adcX + layout.adcW / 2, layout.adcY + 58, { class: "block-title", "text-anchor": "middle" });
   for (const item of columns) {
     const x = colX(item.col);
-    line(root, x, layout.adcY - 22, x, layout.adcY, item.col === demo.col ? "wire active-wire" : "wire sample-wire");
+    line(root, x, layout.adcY - 22, x, layout.adcY + 1, item.col === demo.col ? "wire active-wire" : "wire sample-wire");
   }
   drawSpiBus(root);
 }
@@ -245,8 +251,26 @@ function drawSpiBus(root) {
     const item = lines[i];
     const y = y0 + i * 20;
     const active = item.name === "MISO";
-    line(root, layout.mcuX + layout.mcuW, y, layout.adcX, y, active ? "spi-wire active-wire" : "spi-wire");
+    line(root, layout.mcuX + layout.mcuW, y, layout.adcX + 1, y, active ? "spi-wire active-wire" : "spi-wire");
     addText(root, item.name, layout.mcuX + layout.mcuW + 12, y + 5, { class: active ? "active-label" : "pin-label" });
+  }
+}
+
+function drawClockTrace(root) {
+  const rows = demo.hardware.clockTrace || [];
+  const x = layout.traceX;
+  const y = layout.traceY;
+  root.appendChild(svg("rect", { x, y, width: layout.traceW, height: 402, rx: 6, class: "clock-panel" }));
+  addText(root, "MCU clk I/O", x + 10, y + 22, { class: "clock-title" });
+  addText(root, "clk A1-A4  ADC in       SPI out", x + 10, y + 44, { class: "clock-head" });
+  const visibleRows = demo.auto ? rows : rows.filter((row) => row.row === demo.row);
+  for (let i = 0; i < visibleRows.length; i += 1) {
+    const item = visibleRows[i];
+    const rowY = y + 64 + i * 20;
+    const active = item.row === demo.row;
+    addText(root, `${String(item.clk).padStart(2, "0")}  ${item.address}`, x + 10, rowY, { class: active ? "clock-row active-label" : "clock-row" });
+    addText(root, item.adcInput.replace("C1-C16, ", ""), x + 72, rowY, { class: active ? "clock-row active-label" : "clock-row" });
+    addText(root, item.spiOut.replace("MISO", "MI"), x + 138, rowY, { class: active ? "clock-row active-label" : "clock-row" });
   }
 }
 

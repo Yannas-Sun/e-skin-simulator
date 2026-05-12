@@ -157,6 +157,66 @@ function nearestValidHoneycombPoint(point) {
   return { x: best.x, y: best.y };
 }
 
+function cellKeyForPoint(point) {
+  const coord = pixelToAxial(point.x, point.y);
+  return `${coord.q},${coord.r}`;
+}
+
+function occupiedModuleCells(excludedIds = new Set()) {
+  const cells = new Set();
+  for (const module of state.modules) {
+    if (excludedIds.has(module.id)) continue;
+    cells.add(cellKeyForPoint(module));
+  }
+  return cells;
+}
+
+function canPlaceModulePositions(positions, excludedIds = new Set()) {
+  const occupied = occupiedModuleCells(excludedIds);
+  const pending = new Set();
+  for (const position of positions) {
+    const key = cellKeyForPoint(position);
+    if (occupied.has(key) || pending.has(key)) return false;
+    pending.add(key);
+  }
+  return true;
+}
+
+function nearestAvailableHoneycombPoint(point, excludedIds = new Set()) {
+  const cells = honeycombCells();
+  const occupied = occupiedModuleCells(excludedIds);
+  let best = null;
+  let bestDistance = Infinity;
+  for (const cell of cells) {
+    const key = `${cell.q},${cell.r}`;
+    if (occupied.has(key)) continue;
+    const distance = (cell.x - point.x) ** 2 + (cell.y - point.y) ** 2;
+    if (distance < bestDistance) {
+      best = cell;
+      bestDistance = distance;
+    }
+  }
+  if (best) return { x: best.x, y: best.y };
+  return nearestValidHoneycombPoint(point);
+}
+
+function firstAvailablePasteOffset(sources, preferredDx, preferredDy) {
+  if (!sources.length) return { dx: preferredDx, dy: preferredDy };
+  const attempts = honeycombCells()
+    .map((cell) => ({
+      dx: cell.x - sources[0].x,
+      dy: cell.y - sources[0].y,
+      distance: (cell.x - sources[0].x - preferredDx) ** 2 + (cell.y - sources[0].y - preferredDy) ** 2,
+    }))
+    .sort((a, b) => a.distance - b.distance);
+
+  for (const attempt of attempts) {
+    const positions = sources.map((source) => ({ x: source.x + attempt.dx, y: source.y + attempt.dy }));
+    if (canPlaceModulePositions(positions)) return { dx: attempt.dx, dy: attempt.dy };
+  }
+  return null;
+}
+
 function allocateModuleId() {
   const used = new Set(state.modules.map((module) => module.id));
   let id = 1;
@@ -480,6 +540,12 @@ function updateDrag(event) {
       });
       dx = snappedAnchor.x - state.drag.anchorStart.x;
       dy = snappedAnchor.y - state.drag.anchorStart.y;
+      const selectedIds = new Set(state.drag.moduleStarts.keys());
+      const proposed = [...state.drag.moduleStarts.values()].map((start) => ({ x: start.x + dx, y: start.y + dy }));
+      if (!canPlaceModulePositions(proposed, selectedIds)) {
+        dx = 0;
+        dy = 0;
+      }
     }
 
     for (const module of state.modules) {
@@ -663,6 +729,10 @@ function pasteSelection() {
     const snappedFirst = nearestValidHoneycombPoint({ x: firstModule.x + dx, y: firstModule.y + dy });
     dx = snappedFirst.x - firstModule.x;
     dy = snappedFirst.y - firstModule.y;
+    const available = firstAvailablePasteOffset(state.clipboard.modules, dx, dy);
+    if (!available) return;
+    dx = available.dx;
+    dy = available.dy;
   }
 
   for (const source of state.clipboard.modules) {
@@ -697,7 +767,7 @@ function pasteSelection() {
 }
 
 function createModule(point) {
-  const next = nearestValidHoneycombPoint(point);
+  const next = nearestAvailableHoneycombPoint(point);
   state.modules.push({
     id: allocateModuleId(),
     x: next.x,

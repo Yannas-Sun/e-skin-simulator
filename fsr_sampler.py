@@ -54,6 +54,7 @@ class FSRReadoutProgram:
             row=self.dmux.selected_row,
             words=[column["code"] for column in columns],
         )
+        clock_trace = self.clock_trace(pressed_col=pressed_col, force_percent=force_percent)
 
         return {
             "row": self.dmux.selected_row,
@@ -75,7 +76,34 @@ class FSRReadoutProgram:
                 "parallel": True,
             },
             "spi": spi_frame,
+            "clockTrace": clock_trace,
         }
+
+    def clock_trace(self, pressed_col: int, force_percent: float) -> list[dict]:
+        trace = []
+        saved_row = self.dmux.selected_row
+        for row in range(1, self.dmux.outputs + 1):
+            self.dmux.set_selected_row(row)
+            nodes = self.array.read_row(
+                dmux=self.dmux,
+                pressed_row=row,
+                pressed_col=pressed_col,
+                force_percent=force_percent,
+            )
+            samples = self.adc.sample_parallel([node["nodeVoltage"] for node in nodes])
+            words = [sample["code"] for sample in samples]
+            active_word = words[pressed_col - 1]
+            trace.append(
+                {
+                    "clk": row,
+                    "row": row,
+                    "address": "".join(str(bit) for bit in reversed(self.dmux.address_bits)),
+                    "adcInput": f"C1-C16, C{pressed_col}={nodes[pressed_col - 1]['nodeVoltage']:.2f}V",
+                    "spiOut": f"MISO[{pressed_col}]={active_word}",
+                }
+            )
+        self.dmux.set_selected_row(saved_row)
+        return trace
 
 
 def run_fsr_readout(row: int, col: int, force: float) -> dict:

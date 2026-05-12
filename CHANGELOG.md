@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-05-12 - Dashboard Occupancy and FSR Clock I/O
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Prevented overlapping e-skin modules on the dashboard.
+   - New modules are placed on the nearest free honeycomb cell.
+   - Dragging or pasting modules now rejects positions that would place two modules on the same cell.
+
+2. **[Appearance]** Tightened FSR circuit wiring.
+   - Address, ADC, SPI, and ground connections now extend into their target blocks or symbols to avoid floating-line gaps.
+
+3. **[Feature]** Added MCU clock I/O visibility during FSR auto scan.
+   - The FSR demo now shows per-clock address output, ADC input summary, and SPI MISO output in the circuit area.
+
 ## 2026-05-12 - FSR Circuit Visual Cleanup
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
