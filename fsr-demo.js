@@ -20,6 +20,25 @@ const adcVoltage = document.getElementById("adcVoltage");
 const adcCode = document.getElementById("adcCode");
 const spiFrame = document.getElementById("spiFrame");
 
+const layout = {
+  dmuxX: 70,
+  dmuxY: 150,
+  dmuxW: 135,
+  dmuxH: 390,
+  mcuX: 70,
+  mcuY: 650,
+  mcuW: 210,
+  mcuH: 112,
+  arrayX: 335,
+  arrayY: 130,
+  arrayW: 710,
+  arrayH: 410,
+  adcX: 365,
+  adcY: 700,
+  adcW: 650,
+  adcH: 96,
+};
+
 function svg(tag, attrs = {}) {
   const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
   for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
@@ -101,7 +120,7 @@ function drawCircuit() {
   const root = svg("g");
   svgEl.appendChild(root);
 
-  addText(root, "Complete FSR Readout Circuit", 610, 42, { class: "circuit-title", "text-anchor": "middle" });
+  addText(root, "Complete FSR Readout Circuit", 640, 48, { class: "circuit-title", "text-anchor": "middle" });
 
   drawMcu(root);
   drawDmux(root);
@@ -125,40 +144,39 @@ function drawCircuit() {
 }
 
 function drawMcu(root) {
-  root.appendChild(svg("rect", { x: 60, y: 500, width: 190, height: 115, rx: 8, class: "block mcu" }));
-  addText(root, "MCU", 155, 548, { class: "block-title", "text-anchor": "middle" });
-  addText(root, "Teensy 4.1 style", 155, 576, { class: "small-label", "text-anchor": "middle" });
-  addText(root, "A0-A3", 200, 490, { class: "pin-label" });
-  addText(root, "SPI", 252, 564, { class: "pin-label" });
+  root.appendChild(svg("rect", { x: layout.mcuX, y: layout.mcuY, width: layout.mcuW, height: layout.mcuH, rx: 8, class: "block mcu" }));
+  addText(root, "MCU", layout.mcuX + layout.mcuW / 2, layout.mcuY + 48, { class: "block-title", "text-anchor": "middle" });
+  addText(root, "Teensy 4.1 style", layout.mcuX + layout.mcuW / 2, layout.mcuY + 77, { class: "small-label", "text-anchor": "middle" });
+  addText(root, "A0-A3 row address", layout.mcuX + layout.mcuW + 12, layout.mcuY - 18, { class: "pin-label" });
+  addText(root, "SPI com.", layout.mcuX + layout.mcuW + 16, layout.mcuY + 44, { class: "pin-label" });
 }
 
 function drawDmux(root) {
-  root.appendChild(svg("rect", { x: 85, y: 100, width: 120, height: 330, rx: 6, class: "block dmux" }));
-  addText(root, "DMUX", 145, 85, { class: "block-title", "text-anchor": "middle" });
-  addText(root, "Select", 65, 472, { class: "small-label" });
-  path(root, "M205 490 L205 450 L145 450 L145 430", "wire active-wire");
-  path(root, "M205 490 L205 430", "wire");
+  root.appendChild(svg("rect", { x: layout.dmuxX, y: layout.dmuxY, width: layout.dmuxW, height: layout.dmuxH, rx: 7, class: "block dmux" }));
+  addText(root, "DMUX", layout.dmuxX + layout.dmuxW / 2, layout.dmuxY - 22, { class: "block-title", "text-anchor": "middle" });
+  addText(root, "Select", layout.dmuxX - 18, layout.dmuxY + layout.dmuxH + 38, { class: "small-label" });
+  path(root, `M${layout.mcuX + layout.mcuW} ${layout.mcuY - 8} L${layout.dmuxX + layout.dmuxW / 2} ${layout.mcuY - 8} L${layout.dmuxX + layout.dmuxW / 2} ${layout.dmuxY + layout.dmuxH}`, "wire active-wire");
   for (let row = 1; row <= 16; row += 1) {
     const y = rowY(row);
-    addText(root, `R${row}`, 110, y + 4, { class: row === demo.row ? "row-label active-label" : "row-label" });
-    line(root, 205, y, 315, y, row === demo.row ? "wire active-wire" : "wire");
+    addText(root, `R${row}`, layout.dmuxX + 28, y + 5, { class: row === demo.row ? "row-label active-label" : "row-label" });
+    line(root, layout.dmuxX + layout.dmuxW, y, layout.arrayX, y, row === demo.row ? "wire active-wire" : "wire");
   }
-  addText(root, "Vcc", 118, 128, { class: "pin-label" });
-  addText(root, "GND", 116, 405, { class: "pin-label" });
+  addText(root, "Vcc", layout.dmuxX + layout.dmuxW - 40, layout.dmuxY + 28, { class: "pin-label" });
+  addText(root, "GND", layout.dmuxX + layout.dmuxW - 42, layout.dmuxY + layout.dmuxH - 18, { class: "pin-label" });
 }
 
 function drawArray(root, columns) {
-  root.appendChild(svg("rect", { x: 315, y: 86, width: 620, height: 385, class: "array-bg" }));
-  addText(root, "FSR array: 16 rows x 16 columns", 625, 74, { class: "block-title", "text-anchor": "middle" });
+  root.appendChild(svg("rect", { x: layout.arrayX, y: layout.arrayY, width: layout.arrayW, height: layout.arrayH, class: "array-bg" }));
+  addText(root, "FSR array: 16 rows x 16 columns", layout.arrayX + layout.arrayW / 2, layout.arrayY - 20, { class: "block-title", "text-anchor": "middle" });
 
   for (let row = 1; row <= 16; row += 1) {
     const y = rowY(row);
-    line(root, 315, y, 935, y, row === demo.row ? "array-row active-wire" : "array-row");
+    line(root, layout.arrayX, y, layout.arrayX + layout.arrayW, y, row === demo.row ? "array-row active-wire" : "array-row");
   }
   for (let col = 1; col <= 16; col += 1) {
     const x = colX(col);
-    line(root, x, 105, x, 535, col === demo.col ? "array-column active-wire" : "array-column");
-    addText(root, `C${col}`, x, 563, { class: col === demo.col ? "col-label active-label" : "col-label", "text-anchor": "middle" });
+    line(root, x, layout.arrayY + 18, x, layout.adcY - 34, col === demo.col ? "array-column active-wire" : "array-column");
+    addText(root, `C${col}`, x, layout.arrayY + layout.arrayH + 35, { class: col === demo.col ? "col-label active-label" : "col-label", "text-anchor": "middle" });
   }
 
   for (let row = 1; row <= 16; row += 1) {
@@ -181,46 +199,53 @@ function drawArray(root, columns) {
   const x = colX(demo.col);
   const y = rowY(demo.row);
   resistor(root, x - 32, y - 10, false, "component-line active-component");
-  addText(root, `R${demo.row},${demo.col}`, x + 18, y - 18, { class: "active-label" });
-  addText(root, "FSR", x + 18, y + 22, { class: "active-label" });
+  addText(root, `R${demo.row},${demo.col}`, x + 24, y - 18, { class: "active-label" });
+  addText(root, "FSR", x + 24, y + 22, { class: "active-label" });
 
   for (let col = 1; col <= 16; col += 1) {
     const cx = colX(col);
-    line(root, cx, 535, cx, 574, col === demo.col ? "wire active-wire" : "wire");
-    resistor(root, cx, 574, true, col === demo.col ? "component-line active-component" : "component-line");
-    drawGround(root, cx, 638);
+    line(root, cx, layout.arrayY + layout.arrayH, cx, layout.adcY - 110, col === demo.col ? "wire active-wire" : "wire");
+    resistor(root, cx, layout.adcY - 110, true, col === demo.col ? "component-line active-component" : "component-line");
+    drawGround(root, cx, layout.adcY - 46);
   }
-  addText(root, "16 x 10 kOhm pull-down resistors", 680, 685, { class: "small-label", "text-anchor": "middle" });
+  addText(root, "16 x 10 kOhm pull-down resistors", layout.arrayX + layout.arrayW / 2, layout.adcY - 14, { class: "small-label", "text-anchor": "middle" });
 }
 
 function drawAdc(root, columns) {
-  root.appendChild(svg("rect", { x: 340, y: 585, width: 595, height: 95, rx: 7, class: "block adc" }));
-  addText(root, "16-channel ADC", 638, 638, { class: "block-title", "text-anchor": "middle" });
+  root.appendChild(svg("rect", { x: layout.adcX, y: layout.adcY, width: layout.adcW, height: layout.adcH, rx: 8, class: "block adc" }));
+  addText(root, "16-channel ADC", layout.adcX + layout.adcW / 2, layout.adcY + 58, { class: "block-title", "text-anchor": "middle" });
   for (const item of columns) {
     const x = colX(item.col);
-    line(root, x, 535, x, 585, item.col === demo.col ? "wire active-wire" : "wire");
+    line(root, x, layout.adcY - 20, x, layout.adcY, item.col === demo.col ? "wire active-wire" : "wire");
   }
-  path(root, "M340 632 L280 632 L280 563 L250 563", "wire active-wire");
-  addText(root, "SPI com.", 275, 552, { class: "pin-label" });
+  path(root, `M${layout.adcX} ${layout.adcY + 50} L${layout.mcuX + layout.mcuW + 30} ${layout.adcY + 50} L${layout.mcuX + layout.mcuW + 30} ${layout.mcuY + 46} L${layout.mcuX + layout.mcuW} ${layout.mcuY + 46}`, "wire active-wire");
 }
 
 function drawInfoFlow(root) {
   const row = rowY(demo.row);
   const col = colX(demo.col);
-  path(root, `M205 ${row} L315 ${row} L${col} ${row} L${col} 585`, "signal-flow");
-  path(root, "M340 632 L280 632 L280 563 L250 563", "signal-flow");
-  addText(root, "1. MCU selects row", 58, 655, { class: "step-label" });
-  addText(root, "2. DMUX drives one row", 300, 42, { class: "step-label" });
-  addText(root, "3. Column voltage changes", 610, 502, { class: "step-label", "text-anchor": "middle" });
-  addText(root, "4. ADC samples C1-C16", 965, 635, { class: "step-label" });
+  path(root, `M${layout.dmuxX + layout.dmuxW} ${row} L${layout.arrayX} ${row} L${col} ${row} L${col} ${layout.adcY}`, "signal-flow");
+  path(root, `M${layout.adcX} ${layout.adcY + 50} L${layout.mcuX + layout.mcuW + 30} ${layout.adcY + 50} L${layout.mcuX + layout.mcuW + 30} ${layout.mcuY + 46} L${layout.mcuX + layout.mcuW} ${layout.mcuY + 46}`, "signal-flow");
+  addStep(root, "1", "MCU sets row address", 72, 820);
+  addStep(root, "2", "DMUX drives selected row", 335, 820);
+  addStep(root, "3", "Column divider voltages change", 620, 820);
+  addStep(root, "4", "ADC samples and streams SPI", 945, 820);
 }
 
 function rowY(row) {
-  return 112 + (row - 1) * 22;
+  return layout.arrayY + 28 + (row - 1) * 23;
 }
 
 function colX(col) {
-  return 350 + (col - 1) * 35;
+  return layout.arrayX + 42 + (col - 1) * 40;
+}
+
+function addStep(root, num, text, x, y) {
+  const g = svg("g", { class: "step-badge" });
+  g.appendChild(svg("circle", { cx: x, cy: y - 5, r: 14 }));
+  addText(g, num, x, y, { "text-anchor": "middle" });
+  addText(g, text, x + 24, y, {});
+  root.appendChild(g);
 }
 
 function syncFromControls() {
