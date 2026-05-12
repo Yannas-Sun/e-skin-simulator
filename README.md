@@ -30,7 +30,7 @@ The simulator is intended as an early design and communication tool rather than 
 - Display a live pressure heatmap matching the assembled module topology
 - Show module IDs on the heatmap
 - Estimate real-time data throughput and Ethernet link use
-- Open an FSR readout demo showing DMUX row selection, 16 x 16 FSR voltage-divider readout, 16-channel ADC sampling, and SPI transfer back to the MCU
+- Open an FSR readout demo showing DMUX row selection, 16 x 16 FSR voltage-divider readout, 16-channel ADC sampling, and four-wire SPI transfer back to the MCU
 - Run the FSR demo from programmable Python virtual hardware classes rather than frontend-only formulas
 
 ## Running

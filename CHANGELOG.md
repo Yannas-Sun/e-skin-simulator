@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-05-12 - FSR Bus Rendering and SPI Model
+
+Changes are ordered from most important to least important.
+
+1. Added a Python SPI hardware interface.
+   - `SPIBus` now defines SCK, MOSI, MISO, and CS as explicit virtual hardware lines.
+   - The sampler records what each SPI line carries during the ADC readout frame.
+
+2. Simplified the FSR circuit drawing.
+   - The row-address bus now shows only A1, A2, A3, and A4.
+   - The address bus is rendered as four simple straight lines.
+
+3. Removed the bottom waveform analyzer.
+   - The FSR page now focuses on the circuit and bus connections instead of separate logic traces.
+
+4. Updated SPI visualization.
+   - The circuit now draws SCK, MOSI, MISO, and CS between the MCU and ADC.
+
 ## 2026-05-12 - Programmable FSR Virtual Hardware
 
 Changes are ordered from most important to least important.

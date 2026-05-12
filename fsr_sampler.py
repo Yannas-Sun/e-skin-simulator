@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from fsr_hardware import ADC, DMUX, FSRArray
+from fsr_hardware import ADC, DMUX, FSRArray, SPIBus
 
 
 @dataclass
@@ -12,10 +12,11 @@ class FSRReadoutProgram:
     dmux: DMUX
     array: FSRArray
     adc: ADC
+    spi: SPIBus
 
     @classmethod
     def create(cls) -> "FSRReadoutProgram":
-        return cls(dmux=DMUX(), array=FSRArray(), adc=ADC())
+        return cls(dmux=DMUX(), array=FSRArray(), adc=ADC(), spi=SPIBus())
 
     def tick(self, selected_row: int, pressed_col: int, force_percent: float) -> dict:
         # Address phase: MCU drives A1-A4, DMUX decodes exactly one row.
@@ -48,7 +49,12 @@ class FSRReadoutProgram:
                 }
             )
 
-        # Transfer phase: one SPI transaction returns all columns for this row.
+        # Transfer phase: SPI uses SCK, MOSI, MISO, and CS to move the ADC frame.
+        spi_frame = self.spi.frame(
+            row=self.dmux.selected_row,
+            words=[column["code"] for column in columns],
+        )
+
         return {
             "row": self.dmux.selected_row,
             "pressedCol": pressed_col,
@@ -68,28 +74,8 @@ class FSRReadoutProgram:
                 "vref": self.adc.vref,
                 "parallel": True,
             },
-            "spi": {
-                "summary": f"row {self.dmux.selected_row}, 16 column words",
-                "words": [column["code"] for column in columns],
-            },
-            "logic": self.logic_window(self.dmux.selected_row),
+            "spi": spi_frame,
         }
-
-    @staticmethod
-    def logic_window(start_row: int, steps: int = 9) -> list[dict]:
-        rows = [((start_row - 1 + offset) % 16) + 1 for offset in range(steps)]
-        traces = []
-        for bit in range(4):
-            traces.append(
-                {
-                    "name": f"A{bit + 1}",
-                    "levels": [
-                        {"row": row, "level": ((row - 1) >> bit) & 1}
-                        for row in rows
-                    ],
-                }
-            )
-        return traces
 
 
 def run_fsr_readout(row: int, col: int, force: float) -> dict:

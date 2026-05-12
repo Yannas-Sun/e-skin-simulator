@@ -88,6 +88,44 @@ class ADC:
         ]
 
 
+class SPIBus:
+    """Four-wire SPI interface between the MCU and ADC."""
+
+    def __init__(self) -> None:
+        self.lines = {
+            "SCK": {
+                "direction": "MCU -> ADC",
+                "carries": "serial clock pulses for each ADC data bit",
+            },
+            "MOSI": {
+                "direction": "MCU -> ADC",
+                "carries": "read command and channel-frame control",
+            },
+            "MISO": {
+                "direction": "ADC -> MCU",
+                "carries": "16 sequential 12-bit ADC conversion words",
+            },
+            "CS": {
+                "direction": "MCU -> ADC",
+                "carries": "active-low ADC chip select during the frame",
+            },
+        }
+
+    def frame(self, row: int, words: list[int]) -> dict:
+        return {
+            "summary": f"row {row}, 16 column words",
+            "words": words,
+            "lines": [
+                {
+                    "name": name,
+                    "direction": line["direction"],
+                    "carries": line["carries"],
+                }
+                for name, line in self.lines.items()
+            ],
+        }
+
+
 class FSRArray:
     """16 x 16 FSR matrix with column load resistors to ground."""
 

@@ -126,7 +126,6 @@ function drawCircuit() {
   drawArray(root, columns);
   drawAdc(root, columns);
   drawInfoFlow(root);
-  drawLogicAnalyzer(root);
 
   fsrResistance.textContent = formatOhms(active.fsrOhms);
   adcVoltage.textContent = `${active.nodeVoltage.toFixed(2)} V`;
@@ -140,7 +139,7 @@ function drawCircuit() {
     `ROW_SELECT = ${demo.hardware.address.value.toString(2).padStart(4, "0")}  // A1-A4`,
     `ADC_CH[01..16] sampled simultaneously`,
     `ADC_CH[${demo.col.toString().padStart(2, "0")}] = ${active.code.toString().padStart(4, " ")}`,
-    `SPI frame -> MCU: ${demo.hardware.spi.summary}`,
+    ...demo.hardware.spi.lines.map((line) => `${line.name}: ${line.carries}`),
   ].join("\n");
 }
 
@@ -148,23 +147,20 @@ function drawMcu(root) {
   root.appendChild(svg("rect", { x: layout.mcuX, y: layout.mcuY, width: layout.mcuW, height: layout.mcuH, rx: 8, class: "block mcu" }));
   addText(root, "MCU", layout.mcuX + layout.mcuW / 2, layout.mcuY + 48, { class: "block-title", "text-anchor": "middle" });
   addText(root, "Teensy 4.1 style", layout.mcuX + layout.mcuW / 2, layout.mcuY + 77, { class: "small-label", "text-anchor": "middle" });
-  addText(root, "SPI com.", layout.mcuX + layout.mcuW + 18, layout.mcuY + 44, { class: "pin-label" });
   drawAddressBus(root);
 }
 
 function drawAddressBus(root) {
-  const startX = layout.mcuX + 28;
-  const endY = layout.dmuxY + layout.dmuxH + 18;
-  addText(root, "A1-A4 row address", layout.mcuX + 8, layout.mcuY - 34, { class: "pin-label" });
+  const startX = layout.mcuX + 42;
+  const endX = layout.dmuxX + 34;
+  const y1 = layout.mcuY;
+  const y2 = layout.dmuxY + layout.dmuxH;
   for (let bit = 0; bit < 4; bit += 1) {
-    const x = startX + bit * 38;
-    const y1 = layout.mcuY;
-    const y2 = endY + bit * 9;
+    const x1 = startX + bit * 42;
+    const x2 = endX + bit * 24;
     const level = addressBit(demo.row, bit);
-    line(root, x, y1, x, y2, level ? "logic-wire high" : "logic-wire low");
-    line(root, x, y2, layout.dmuxX + 18 + bit * 28, y2, level ? "logic-wire high" : "logic-wire low");
-    line(root, layout.dmuxX + 18 + bit * 28, y2, layout.dmuxX + 18 + bit * 28, layout.dmuxY + layout.dmuxH, level ? "logic-wire high" : "logic-wire low");
-    addText(root, `A${bit + 1}`, x - 8, y1 - 10, { class: level ? "active-label" : "pin-label" });
+    line(root, x1, y1, x2, y2, level ? "logic-wire high" : "logic-wire low");
+    addText(root, `A${bit + 1}`, x1 - 8, y1 - 10, { class: level ? "active-label" : "pin-label" });
   }
 }
 
@@ -246,48 +242,30 @@ function drawAdc(root, columns) {
     const x = colX(item.col);
     line(root, x, layout.adcY - 22, x, layout.adcY, item.col === demo.col ? "wire active-wire" : "wire sample-wire");
   }
-  path(root, `M${layout.adcX} ${layout.adcY + 50} L${layout.mcuX + layout.mcuW + 30} ${layout.adcY + 50} L${layout.mcuX + layout.mcuW + 30} ${layout.mcuY + 46} L${layout.mcuX + layout.mcuW} ${layout.mcuY + 46}`, "wire active-wire");
+  drawSpiBus(root);
   addText(root, "C1-C16 sampled in parallel", layout.adcX + layout.adcW - 18, layout.adcY - 18, { class: "active-label", "text-anchor": "end" });
+}
+
+function drawSpiBus(root) {
+  const lines = demo.hardware.spi.lines;
+  const y0 = layout.mcuY + 24;
+  for (let i = 0; i < lines.length; i += 1) {
+    const item = lines[i];
+    const y = y0 + i * 20;
+    const active = item.name === "MISO";
+    line(root, layout.mcuX + layout.mcuW, y, layout.adcX, y, active ? "spi-wire active-wire" : "spi-wire");
+    addText(root, item.name, layout.mcuX + layout.mcuW + 12, y + 5, { class: active ? "active-label" : "pin-label" });
+  }
 }
 
 function drawInfoFlow(root) {
   const row = rowY(demo.row);
   const col = colX(demo.col);
   path(root, `M${layout.dmuxX + layout.dmuxW} ${row} L${layout.arrayX} ${row} L${col} ${row} L${col} ${layout.adcY}`, "signal-flow");
-  path(root, `M${layout.adcX} ${layout.adcY + 50} L${layout.mcuX + layout.mcuW + 30} ${layout.adcY + 50} L${layout.mcuX + layout.mcuW + 30} ${layout.mcuY + 46} L${layout.mcuX + layout.mcuW} ${layout.mcuY + 46}`, "signal-flow");
   addStep(root, "1", "MCU sets row address", 72, 820);
   addStep(root, "2", "DMUX drives selected row", 335, 820);
   addStep(root, "3", "Column divider voltages change", 620, 820);
   addStep(root, "4", "ADC samples and streams SPI", 945, 820);
-}
-
-function drawLogicAnalyzer(root) {
-  const x0 = 120;
-  const y0 = 865;
-  const stepW = 82;
-  const amp = 18;
-  addText(root, "Auto scan row-address logic", x0, y0 - 30, { class: "block-title" });
-  addText(root, demo.auto ? "running: row address increments on each scan step" : "manual: current row address is held", x0 + 305, y0 - 30, { class: "small-label" });
-  for (let bit = 0; bit < demo.hardware.logic.length; bit += 1) {
-    const trace = demo.hardware.logic[bit];
-    const y = y0 + bit * 30;
-    addText(root, trace.name, x0 - 36, y + 5, { class: "pin-label" });
-    const points = [];
-    for (let i = 0; i < trace.levels.length; i += 1) {
-      const high = trace.levels[i].level;
-      const x = x0 + i * stepW;
-      const yy = y - (high ? amp : 0);
-      if (i === 0) {
-        points.push(`M${x} ${yy}`);
-      } else {
-        const prevHigh = trace.levels[i - 1].level;
-        const prevY = y - (prevHigh ? amp : 0);
-        points.push(`L${x} ${prevY}`);
-        points.push(`L${x} ${yy}`);
-      }
-    }
-    path(root, points.join(" "), bit === 0 ? "logic-wave high" : "logic-wave");
-  }
 }
 
 function rowY(row) {
