@@ -4,6 +4,7 @@ const demo = {
   force: 62,
   auto: false,
   timer: null,
+  hardware: null,
 };
 
 const svgEl = document.getElementById("fsrCircuit");
@@ -87,20 +88,9 @@ function drawDiode(parent, x, y, className = "diode") {
 }
 
 function addressBit(row, bit) {
+  const bits = demo.hardware?.address?.bits;
+  if (bits && bits[bit]) return bits[bit].level;
   return ((row - 1) >> bit) & 1;
-}
-
-function fsrOhms(force) {
-  const minR = 3500;
-  const maxR = 180000;
-  const f = Math.max(0, Math.min(1, force / 100));
-  return maxR * (1 - f) ** 2 + minR;
-}
-
-function voltageFromResistance(resistance) {
-  const pullDown = 10000;
-  const vcc = 3.3;
-  return vcc * (pullDown / (resistance + pullDown));
 }
 
 function formatOhms(ohms) {
@@ -108,26 +98,23 @@ function formatOhms(ohms) {
   return `${Math.round(ohms)} Ohm`;
 }
 
-function calculateColumns() {
-  const values = [];
-  for (let col = 1; col <= 16; col += 1) {
-    const force = col === demo.col ? demo.force : Math.max(0, demo.force * 0.08 * Math.exp(-Math.abs(col - demo.col) / 2.5));
-    const resistance = fsrOhms(force);
-    const voltage = voltageFromResistance(resistance);
-    values.push({
-      col,
-      force,
-      resistance,
-      voltage,
-      code: Math.round((voltage / 3.3) * 4095),
-    });
-  }
-  return values;
+async function requestHardwareState() {
+  const response = await fetch("/api/fsr-readout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      row: demo.row,
+      col: demo.col,
+      force: demo.force,
+    }),
+  });
+  demo.hardware = await response.json();
 }
 
 function drawCircuit() {
+  if (!demo.hardware) return;
   svgEl.innerHTML = "";
-  const columns = calculateColumns();
+  const columns = demo.hardware.columns;
   const active = columns[demo.col - 1];
   const root = svg("g");
   svgEl.appendChild(root);
@@ -141,8 +128,8 @@ function drawCircuit() {
   drawInfoFlow(root);
   drawLogicAnalyzer(root);
 
-  fsrResistance.textContent = formatOhms(active.resistance);
-  adcVoltage.textContent = `${active.voltage.toFixed(2)} V`;
+  fsrResistance.textContent = formatOhms(active.fsrOhms);
+  adcVoltage.textContent = `${active.nodeVoltage.toFixed(2)} V`;
   adcCode.textContent = String(active.code);
   activeCell.textContent = `R${demo.row},C${demo.col}`;
   rowValue.textContent = `R${demo.row}`;
@@ -150,10 +137,10 @@ function drawCircuit() {
   forceValue.textContent = `${demo.force}%`;
   scanState.textContent = demo.auto ? "auto scan" : "manual";
   spiFrame.textContent = [
-    `ROW_SELECT = ${demo.row.toString(2).padStart(4, "0")}  // DMUX address`,
+    `ROW_SELECT = ${demo.hardware.address.value.toString(2).padStart(4, "0")}  // A1-A4`,
     `ADC_CH[01..16] sampled simultaneously`,
     `ADC_CH[${demo.col.toString().padStart(2, "0")}] = ${active.code.toString().padStart(4, " ")}`,
-    `SPI frame -> MCU: row ${demo.row}, 16 column words`,
+    `SPI frame -> MCU: ${demo.hardware.spi.summary}`,
   ].join("\n");
 }
 
@@ -168,7 +155,7 @@ function drawMcu(root) {
 function drawAddressBus(root) {
   const startX = layout.mcuX + 28;
   const endY = layout.dmuxY + layout.dmuxH + 18;
-  addText(root, "A0-A3 row address", layout.mcuX + 8, layout.mcuY - 34, { class: "pin-label" });
+  addText(root, "A1-A4 row address", layout.mcuX + 8, layout.mcuY - 34, { class: "pin-label" });
   for (let bit = 0; bit < 4; bit += 1) {
     const x = startX + bit * 38;
     const y1 = layout.mcuY;
@@ -177,7 +164,7 @@ function drawAddressBus(root) {
     line(root, x, y1, x, y2, level ? "logic-wire high" : "logic-wire low");
     line(root, x, y2, layout.dmuxX + 18 + bit * 28, y2, level ? "logic-wire high" : "logic-wire low");
     line(root, layout.dmuxX + 18 + bit * 28, y2, layout.dmuxX + 18 + bit * 28, layout.dmuxY + layout.dmuxH, level ? "logic-wire high" : "logic-wire low");
-    addText(root, `A${bit}`, x - 8, y1 - 10, { class: level ? "active-label" : "pin-label" });
+    addText(root, `A${bit + 1}`, x - 8, y1 - 10, { class: level ? "active-label" : "pin-label" });
   }
 }
 
@@ -185,12 +172,13 @@ function drawDmux(root) {
   root.appendChild(svg("rect", { x: layout.dmuxX, y: layout.dmuxY, width: layout.dmuxW, height: layout.dmuxH, rx: 7, class: "block dmux" }));
   addText(root, "DMUX", layout.dmuxX + layout.dmuxW / 2, layout.dmuxY - 22, { class: "block-title", "text-anchor": "middle" });
   addText(root, "Select", layout.dmuxX - 18, layout.dmuxY + layout.dmuxH + 38, { class: "small-label" });
-  for (let row = 1; row <= 16; row += 1) {
+  for (const rowState of demo.hardware.dmuxRows) {
+    const row = rowState.row;
     const y = rowY(row);
-    const active = row === demo.row;
+    const active = rowState.selected;
     const diodeX = layout.dmuxX + layout.dmuxW + 28;
     addText(root, `R${row}`, layout.dmuxX + 28, y + 5, { class: row === demo.row ? "row-label active-label" : "row-label" });
-    addText(root, active ? "Vcc" : "GND", layout.dmuxX + 78, y + 5, { class: active ? "active-label dmux-state" : "pin-label dmux-state" });
+    addText(root, rowState.state, layout.dmuxX + 78, y + 5, { class: active ? "active-label dmux-state" : "pin-label dmux-state" });
     line(root, layout.dmuxX + layout.dmuxW, y, diodeX - 11, y, active ? "wire active-wire" : "wire ground-wire");
     drawDiode(root, diodeX, y, active ? "diode active-diode" : "diode");
     line(root, diodeX + 10, y, layout.arrayX, y, active ? "wire active-wire" : "wire ground-wire");
@@ -218,7 +206,8 @@ function drawArray(root, columns) {
       const x = colX(col);
       const y = rowY(row);
       const selectedCell = row === demo.row && col === demo.col;
-      const forceHalo = row === demo.row && Math.abs(col - demo.col) <= 1;
+      const column = columns[col - 1];
+      const forceHalo = row === demo.row && column.force > 1;
       root.appendChild(svg("rect", {
         x: x - 10,
         y: y - 8,
@@ -279,20 +268,19 @@ function drawLogicAnalyzer(root) {
   const amp = 18;
   addText(root, "Auto scan row-address logic", x0, y0 - 30, { class: "block-title" });
   addText(root, demo.auto ? "running: row address increments on each scan step" : "manual: current row address is held", x0 + 305, y0 - 30, { class: "small-label" });
-  for (let bit = 0; bit < 4; bit += 1) {
+  for (let bit = 0; bit < demo.hardware.logic.length; bit += 1) {
+    const trace = demo.hardware.logic[bit];
     const y = y0 + bit * 30;
-    addText(root, `A${bit}`, x0 - 36, y + 5, { class: "pin-label" });
+    addText(root, trace.name, x0 - 36, y + 5, { class: "pin-label" });
     const points = [];
-    for (let i = 0; i < 9; i += 1) {
-      const row = ((demo.row - 1 + i) % 16) + 1;
-      const high = addressBit(row, bit);
+    for (let i = 0; i < trace.levels.length; i += 1) {
+      const high = trace.levels[i].level;
       const x = x0 + i * stepW;
       const yy = y - (high ? amp : 0);
       if (i === 0) {
         points.push(`M${x} ${yy}`);
       } else {
-        const prevRow = ((demo.row - 1 + i - 1) % 16) + 1;
-        const prevHigh = addressBit(prevRow, bit);
+        const prevHigh = trace.levels[i - 1].level;
         const prevY = y - (prevHigh ? amp : 0);
         points.push(`L${x} ${prevY}`);
         points.push(`L${x} ${yy}`);
@@ -318,17 +306,22 @@ function addStep(root, num, text, x, y) {
   root.appendChild(g);
 }
 
+async function updateDemo() {
+  await requestHardwareState();
+  drawCircuit();
+}
+
 function syncFromControls() {
   demo.row = Number(rowSelect.value);
   demo.col = Number(colSelect.value);
   demo.force = Number(forceSelect.value);
-  drawCircuit();
+  updateDemo();
 }
 
 function stepRow() {
   demo.row = demo.row === 16 ? 1 : demo.row + 1;
   rowSelect.value = demo.row;
-  drawCircuit();
+  updateDemo();
 }
 
 function toggleAutoScan() {
@@ -339,7 +332,7 @@ function toggleAutoScan() {
   } else {
     window.clearInterval(demo.timer);
   }
-  drawCircuit();
+  updateDemo();
 }
 
 rowSelect.addEventListener("input", syncFromControls);
@@ -348,4 +341,4 @@ forceSelect.addEventListener("input", syncFromControls);
 document.getElementById("singleStep").addEventListener("click", stepRow);
 document.getElementById("autoScan").addEventListener("click", toggleAutoScan);
 
-drawCircuit();
+updateDemo();

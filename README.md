@@ -31,6 +31,7 @@ The simulator is intended as an early design and communication tool rather than 
 - Show module IDs on the heatmap
 - Estimate real-time data throughput and Ethernet link use
 - Open an FSR readout demo showing DMUX row selection, 16 x 16 FSR voltage-divider readout, 16-channel ADC sampling, and SPI transfer back to the MCU
+- Run the FSR demo from programmable Python virtual hardware classes rather than frontend-only formulas
 
 ## Running
 
@@ -70,6 +71,8 @@ Use the HTTP address above rather than opening `index.html` directly, because th
 - `server.py` - Python HTTP server and simulation API
 - `index.html` - application layout
 - `fsr-demo.html` - interactive FSR readout circuit demo
+- `fsr_hardware.py` - virtual DMUX, ADC, resistor, FSR, and FSR array hardware primitives
+- `fsr_sampler.py` - programmable scan controller that calls the virtual hardware, similar to firmware or Verilog-style sequencing
 - `styles.css` - user interface styling
 - `app.js` - workspace interaction, rendering, and API calls
 - `fsr-demo.js` - DMUX, FSR, ADC, and MCU readout visualization logic

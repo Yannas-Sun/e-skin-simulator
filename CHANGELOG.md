@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-05-12 - Programmable FSR Virtual Hardware
+
+Changes are ordered from most important to least important.
+
+1. Split hardware simulation from demo rendering.
+   - Added `fsr_hardware.py` for virtual hardware primitives.
+   - Added `fsr_sampler.py` for the programmable sampling sequence.
+   - The browser no longer owns the FSR resistance, voltage-divider, ADC, or row-address calculations.
+
+2. Added explicit Python hardware classes.
+   - `DMUX` is controlled by A1-A4 and exposes one selected row as Vcc while grounding all other rows.
+   - `ADC` performs parallel 16-channel sampling and converts voltages to 12-bit codes.
+   - `Resistor`, `FSR`, and `FSRArray` model the load resistor, force-dependent FSR resistance, and 16 x 16 matrix.
+
+3. Added a programmable readout controller.
+   - `FSRReadoutProgram.tick(...)` executes address, analog, conversion, and SPI-transfer phases.
+   - The structure is intentionally similar to firmware or Verilog-style sequencing.
+
+4. Added a backend API for the FSR demo.
+   - `/api/fsr-readout` returns DMUX row states, address bits, column node voltages, ADC codes, SPI frame words, and logic traces.
+   - The frontend now visualizes this returned hardware state.
+
+5. Updated documentation.
+   - README now lists the Python virtual hardware and programmable sampler files.
+
 ## 2026-05-12 - FSR Readout Circuit Correction
 
 Changes are ordered from most important to least important.

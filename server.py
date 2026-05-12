@@ -6,6 +6,8 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+from fsr_sampler import run_fsr_readout
+
 
 ROOT = Path(__file__).resolve().parent
 MODULE_CHANNELS = 560
@@ -146,10 +148,15 @@ class Handler(SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
     def do_POST(self) -> None:
-        if self.path != "/api/simulate":
-            self.send_error(404)
+        if self.path == "/api/simulate":
+            self.handle_simulation()
             return
+        if self.path == "/api/fsr-readout":
+            self.handle_fsr_readout()
+            return
+        self.send_error(404)
 
+    def handle_simulation(self) -> None:
         length = int(self.headers.get("Content-Length", "0"))
         payload = json.loads(self.rfile.read(length) or b"{}")
         modules = payload.get("modules", [])
@@ -164,13 +171,25 @@ class Handler(SimpleHTTPRequestHandler):
             "moduleCount": len(modules),
             "objectCount": len(objects),
         }
+        self.write_json(response)
+
+    def handle_fsr_readout(self) -> None:
+        length = int(self.headers.get("Content-Length", "0"))
+        payload = json.loads(self.rfile.read(length) or b"{}")
+        response = run_fsr_readout(
+            row=int(payload.get("row", 1)),
+            col=int(payload.get("col", 8)),
+            force=float(payload.get("force", 62)),
+        )
+        self.write_json(response)
+
+    def write_json(self, response: dict[str, Any]) -> None:
         data = json.dumps(response).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
-
 
 def main() -> None:
     server = ThreadingHTTPServer(("127.0.0.1", 8000), Handler)
