@@ -120,10 +120,10 @@ class FSRReadoutProgram:
         return trace
 
 
-def run_fsr_readout(row: int, col: int, force: float, object_row: int | None = None, object_size: float = 54.0, object_mass: float | None = None) -> dict:
+def run_fsr_readout(row: int, col: int, force: float, object_row: int | None = None, object_size: float = 72.0, object_mass: float | None = None) -> dict:
     row = max(1, min(16, int(row)))
     object_row = row if object_row is None else max(1, min(16, int(object_row)))
     col = max(1, min(16, int(col)))
-    object_size = max(20.0, min(140.0, float(object_size)))
+    object_size = max(20.0, min(240.0, float(object_size)))
     object_mass = max(0.0, min(1000.0, float(force) * 10.0 if object_mass is None else float(object_mass)))
     return FSRReadoutProgram.create().tick(row, object_row, col, object_size, object_mass)

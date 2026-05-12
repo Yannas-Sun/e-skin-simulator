@@ -763,7 +763,7 @@ h2 {
   pointer-events: none;
 }
 
-.pressure-object circle {
+.pressure-object .pressure-square {
   fill: rgba(215, 87, 69, 0.28);
   stroke: #9f3d31;
   stroke-width: 2.2;
@@ -834,6 +834,20 @@ h2 {
 
 .fsr-cell.neighbor {
   fill: rgba(242, 196, 71, 0.26);
+}
+
+.fsr-cell.covered {
+  fill: rgba(215, 87, 69, 0.62);
+  stroke: #9f3d31;
+  stroke-width: 1.9;
+  stroke-dasharray: none;
+}
+
+.fsr-cell.detected {
+  fill: rgba(30, 138, 165, 0.72);
+  stroke: #0a657d;
+  stroke-width: 2.2;
+  stroke-dasharray: none;
 }
 
 .fsr-cell.selected {

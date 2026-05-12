@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-05-12 - FSR Square Object Coverage
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Appearance]** Changed the FSR pressure object to a square.
+   - The object drawing now uses a square footprint and supports a larger size range.
+   - Removed the local highlighted FSR label and inline FSR resistor symbol from the object area.
+
+2. **[Logic]** Updated covered and detected FSR states.
+   - All FSR cells covered by the square object are shown in red.
+   - During auto scan, covered cells on the currently scanned row are shown in blue.
+
+3. **[Appearance]** Cleaned remaining circuit alignment issues.
+   - Removed the animated orange vertical signal line through the object area.
+   - Lowered the MCU so its lower edge aligns with the ADC, allowing the CS line to connect cleanly.
+
 ## 2026-05-12 - FSR Object Controls and Binary SPI
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

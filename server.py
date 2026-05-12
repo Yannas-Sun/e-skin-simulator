@@ -181,7 +181,7 @@ class Handler(SimpleHTTPRequestHandler):
             col=int(payload.get("col", 8)),
             force=float(payload.get("force", 62)),
             object_row=int(payload.get("objectRow", payload.get("row", 1))),
-            object_size=float(payload.get("objectSize", 54)),
+            object_size=float(payload.get("objectSize", 72)),
             object_mass=float(payload.get("objectMass", payload.get("force", 62) * 10)),
         )
         self.write_json(response)

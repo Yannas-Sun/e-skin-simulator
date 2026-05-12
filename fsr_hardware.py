@@ -138,14 +138,14 @@ class FSRArray:
 
     def force_at(self, row: int, col: int, pressed_row: int, pressed_col: int, object_size: float, object_mass: float) -> float:
         peak_force = max(0.0, min(100.0, object_mass / 10.0))
-        radius_cells = max(0.55, min(3.6, object_size / 34.0))
+        half_cells = max(0.5, min(4.8, object_size / 46.0))
         row_scale = 23.0 / 40.0
-        distance = (((row - pressed_row) * row_scale) ** 2 + (col - pressed_col) ** 2) ** 0.5
-        if distance > radius_cells + 1.6:
+        dx = abs(col - pressed_col)
+        dy = abs(row - pressed_row) * row_scale
+        if dx > half_cells or dy > half_cells:
             return 0.0
-        if distance <= radius_cells:
-            return peak_force * (1.0 - 0.42 * (distance / radius_cells))
-        return peak_force * 0.12 * (2.718281828 ** (-(distance - radius_cells) / 0.65))
+        edge_falloff = max(dx, dy) / half_cells
+        return peak_force * (1.0 - 0.28 * edge_falloff)
 
     def divider_voltage(self, row_voltage: float, fsr_ohms: float) -> float:
         if row_voltage <= 0:
@@ -168,7 +168,7 @@ class FSRArray:
                     "fsrOhms": resistance,
                     "loadOhms": self.load.ohms,
                     "nodeVoltage": voltage,
-                    "active": row == pressed_row and col == pressed_col,
+                    "active": force > 0,
                 }
             )
         return readings

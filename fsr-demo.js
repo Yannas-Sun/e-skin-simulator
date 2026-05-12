@@ -2,7 +2,7 @@ const demo = {
   row: 1,
   objectRow: 8,
   col: 8,
-  objectSize: 54,
+  objectSize: 72,
   objectMass: 620,
   auto: false,
   timer: null,
@@ -32,7 +32,7 @@ const layout = {
   dmuxW: 135,
   dmuxH: 390,
   mcuX: 70,
-  mcuY: 635,
+  mcuY: 659,
   mcuW: 210,
   mcuH: 112,
   arrayX: 335,
@@ -209,25 +209,19 @@ function drawArray(root, columns) {
     for (let col = 1; col <= 16; col += 1) {
       const x = colX(col);
       const y = rowY(row);
-      const selectedCell = row === demo.objectRow && col === demo.col;
-      const column = columns[col - 1];
-      const forceHalo = row === demo.objectRow && column.force > 1;
+      const covered = objectCoversCell(row, col);
+      const detected = demo.auto && row === demo.row && covered;
       root.appendChild(svg("rect", {
         x: x - 10,
         y: y - 8,
         width: 20,
         height: 16,
         rx: 3,
-        class: selectedCell ? "fsr-cell selected" : forceHalo ? "fsr-cell neighbor" : "fsr-cell",
+        class: detected ? "fsr-cell detected" : covered ? "fsr-cell covered" : "fsr-cell",
       }));
     }
   }
 
-  const x = colX(demo.col);
-  const y = rowY(demo.objectRow);
-  resistor(root, x - 32, y - 10, false, "component-line active-component");
-  addText(root, `R${demo.objectRow},${demo.col}`, x + 24, y - 18, { class: "active-label" });
-  addText(root, "FSR", x + 24, y + 22, { class: "active-label" });
   drawPressureObject(root);
 
   for (let col = 1; col <= 16; col += 1) {
@@ -288,18 +282,14 @@ function drawClockTrace(root) {
 function drawPressureObject(root) {
   const x = colX(demo.col);
   const y = rowY(demo.objectRow);
-  const radius = Math.max(14, Math.min(42, demo.objectSize / 3.2));
+  const side = Math.max(22, Math.min(122, demo.objectSize / 1.9));
   const g = svg("g", { class: "pressure-object", transform: `translate(${x} ${y})` });
-  g.appendChild(svg("circle", { cx: 0, cy: 0, r: radius }));
-  g.appendChild(svg("circle", { cx: 0, cy: 0, r: 7, class: "pressure-core" }));
-  addText(g, "object", 0, -24, { class: "object-label", "text-anchor": "middle" });
+  g.appendChild(svg("rect", { x: -side / 2, y: -side / 2, width: side, height: side, class: "pressure-square" }));
+  g.appendChild(svg("rect", { x: -7, y: -7, width: 14, height: 14, class: "pressure-core" }));
   root.appendChild(g);
 }
 
 function drawInfoFlow(root) {
-  const row = rowY(demo.row);
-  const col = colX(demo.col);
-  path(root, `M${layout.dmuxX + layout.dmuxW} ${row} L${layout.arrayX} ${row} L${col} ${row} L${col} ${layout.adcY}`, "signal-flow");
   addStep(root, "1", "MCU sets row address", 72, 820);
   addStep(root, "2", "DMUX drives selected row", 335, 820);
   addStep(root, "3", "Column divider voltages change", 620, 820);
@@ -312,6 +302,12 @@ function rowY(row) {
 
 function colX(col) {
   return layout.arrayX + 42 + (col - 1) * 40;
+}
+
+function objectCoversCell(row, col) {
+  const halfCells = Math.max(0.5, Math.min(4.8, demo.objectSize / 46));
+  const rowScale = 23 / 40;
+  return Math.abs(col - demo.col) <= halfCells && Math.abs(row - demo.objectRow) * rowScale <= halfCells;
 }
 
 function clamp(value, min, max) {
