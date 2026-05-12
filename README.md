@@ -74,3 +74,4 @@ Use the HTTP address above rather than opening `index.html` directly, because th
 - `app.js` - workspace interaction, rendering, and API calls
 - `fsr-demo.js` - DMUX, FSR, ADC, and MCU readout visualization logic
 - `E_skin_plan_report.pdf` - source planning report and project background
+- `CHANGELOG.md` - ordered record of pushed changes
