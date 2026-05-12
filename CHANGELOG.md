@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-05-12 - FSR Object Footprint Alignment
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Appearance]** Removed manual row and column sliders from the FSR controls.
+   - Scan row is now controlled by Step Row or Auto Scan.
+   - Object column and row are controlled directly by placing the object on the array.
+
+2. **[Logic]** Aligned the square object footprint with covered FSR cells.
+   - Object size now maps directly to the rendered square side length.
+   - The Python pressure model and frontend covered-cell rendering use the same square footprint geometry.
+
 ## 2026-05-12 - FSR Square Object Coverage
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

@@ -11,12 +11,8 @@ const demo = {
 };
 
 const svgEl = document.getElementById("fsrCircuit");
-const rowSelect = document.getElementById("rowSelect");
-const colSelect = document.getElementById("colSelect");
 const objectSizeRange = document.getElementById("objectSizeRange");
 const objectMassRange = document.getElementById("objectMassRange");
-const rowValue = document.getElementById("rowValue");
-const colValue = document.getElementById("colValue");
 const objectSizeValue = document.getElementById("objectSizeValue");
 const objectMassValue = document.getElementById("objectMassValue");
 const scanState = document.getElementById("scanState");
@@ -142,8 +138,6 @@ function drawCircuit() {
   adcVoltage.textContent = `${active.nodeVoltage.toFixed(2)} V`;
   adcCode.textContent = String(active.code);
   activeCell.textContent = `R${demo.objectRow},C${demo.col}`;
-  rowValue.textContent = `R${demo.row}`;
-  colValue.textContent = `C${demo.col}`;
   objectSizeValue.textContent = `${demo.objectSize} mm`;
   objectMassValue.textContent = `${demo.objectMass} g`;
   scanState.textContent = demo.auto ? "auto scan" : "manual";
@@ -282,7 +276,7 @@ function drawClockTrace(root) {
 function drawPressureObject(root) {
   const x = colX(demo.col);
   const y = rowY(demo.objectRow);
-  const side = Math.max(22, Math.min(122, demo.objectSize / 1.9));
+  const side = demo.objectSize;
   const g = svg("g", { class: "pressure-object", transform: `translate(${x} ${y})` });
   g.appendChild(svg("rect", { x: -side / 2, y: -side / 2, width: side, height: side, class: "pressure-square" }));
   g.appendChild(svg("rect", { x: -7, y: -7, width: 14, height: 14, class: "pressure-core" }));
@@ -305,9 +299,8 @@ function colX(col) {
 }
 
 function objectCoversCell(row, col) {
-  const halfCells = Math.max(0.5, Math.min(4.8, demo.objectSize / 46));
-  const rowScale = 23 / 40;
-  return Math.abs(col - demo.col) <= halfCells && Math.abs(row - demo.objectRow) * rowScale <= halfCells;
+  const halfSide = demo.objectSize / 2;
+  return Math.abs(colX(col) - colX(demo.col)) <= halfSide && Math.abs(rowY(row) - rowY(demo.objectRow)) <= halfSide;
 }
 
 function clamp(value, min, max) {
@@ -331,7 +324,6 @@ function placeObjectFromPoint(point) {
   const row = clamp(Math.round((point.y - (layout.arrayY + 28)) / 23) + 1, 1, 16);
   demo.objectRow = row;
   demo.col = col;
-  colSelect.value = demo.col;
   updateDemo();
 }
 
@@ -366,8 +358,6 @@ async function updateDemo() {
 }
 
 function syncFromControls() {
-  demo.row = Number(rowSelect.value);
-  demo.col = Number(colSelect.value);
   demo.objectSize = Number(objectSizeRange.value);
   demo.objectMass = Number(objectMassRange.value);
   updateDemo();
@@ -375,7 +365,6 @@ function syncFromControls() {
 
 function stepRow() {
   demo.row = demo.row === 16 ? 1 : demo.row + 1;
-  rowSelect.value = demo.row;
   updateDemo();
 }
 
@@ -390,8 +379,6 @@ function toggleAutoScan() {
   updateDemo();
 }
 
-rowSelect.addEventListener("input", syncFromControls);
-colSelect.addEventListener("input", syncFromControls);
 objectSizeRange.addEventListener("input", syncFromControls);
 objectMassRange.addEventListener("input", syncFromControls);
 svgEl.addEventListener("pointerdown", beginObjectPlacement);
