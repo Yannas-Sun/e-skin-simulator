@@ -2,7 +2,8 @@ const demo = {
   row: 1,
   objectRow: 8,
   col: 8,
-  force: 62,
+  objectSize: 54,
+  objectMass: 620,
   auto: false,
   timer: null,
   hardware: null,
@@ -12,10 +13,12 @@ const demo = {
 const svgEl = document.getElementById("fsrCircuit");
 const rowSelect = document.getElementById("rowSelect");
 const colSelect = document.getElementById("colSelect");
-const forceSelect = document.getElementById("forceSelect");
+const objectSizeRange = document.getElementById("objectSizeRange");
+const objectMassRange = document.getElementById("objectMassRange");
 const rowValue = document.getElementById("rowValue");
 const colValue = document.getElementById("colValue");
-const forceValue = document.getElementById("forceValue");
+const objectSizeValue = document.getElementById("objectSizeValue");
+const objectMassValue = document.getElementById("objectMassValue");
 const scanState = document.getElementById("scanState");
 const activeCell = document.getElementById("activeCell");
 const fsrResistance = document.getElementById("fsrResistance");
@@ -111,7 +114,8 @@ async function requestHardwareState() {
       row: demo.row,
       objectRow: demo.objectRow,
       col: demo.col,
-      force: demo.force,
+      objectSize: demo.objectSize,
+      objectMass: demo.objectMass,
     }),
   });
   demo.hardware = await response.json();
@@ -140,11 +144,12 @@ function drawCircuit() {
   activeCell.textContent = `R${demo.objectRow},C${demo.col}`;
   rowValue.textContent = `R${demo.row}`;
   colValue.textContent = `C${demo.col}`;
-  forceValue.textContent = `${demo.force}%`;
+  objectSizeValue.textContent = `${demo.objectSize} mm`;
+  objectMassValue.textContent = `${demo.objectMass} g`;
   scanState.textContent = demo.auto ? "auto scan" : "manual";
   spiFrame.textContent = [
     `ROW_SELECT = ${demo.hardware.address.value.toString(2).padStart(4, "0")}  // A1-A4`,
-    `OBJECT = R${demo.objectRow},C${demo.col}  FORCE = ${demo.force}%`,
+    `OBJECT = R${demo.objectRow},C${demo.col}  SIZE = ${demo.objectSize} mm  MASS = ${demo.objectMass} g`,
     `ADC_CH[01..16] sampled simultaneously`,
     `ADC_CH[${demo.col.toString().padStart(2, "0")}] = ${active.code.toString().padStart(4, " ")}`,
     ...demo.hardware.spi.lines.map((line) => `${line.name}: ${line.carries}`),
@@ -268,23 +273,24 @@ function drawClockTrace(root) {
   const y = layout.traceY;
   root.appendChild(svg("rect", { x, y, width: layout.traceW, height: 402, rx: 6, class: "clock-panel" }));
   addText(root, "MCU clk I/O", x + 10, y + 22, { class: "clock-title" });
-  addText(root, "clk A1-A4 MOSI    MISO", x + 10, y + 44, { class: "clock-head" });
+  addText(root, "clk A1-A4 MOSI(bin) MISO(bin)", x + 10, y + 44, { class: "clock-head" });
   const visibleRows = demo.auto ? rows : rows.filter((row) => row.row === demo.row);
   for (let i = 0; i < visibleRows.length; i += 1) {
     const item = visibleRows[i];
     const rowY = y + 64 + i * 20;
     const active = item.row === demo.row;
     addText(root, `${String(item.clk).padStart(2, "0")}  ${item.address}`, x + 10, rowY, { class: active ? "clock-row active-label" : "clock-row" });
-    addText(root, item.mosi, x + 72, rowY, { class: active ? "clock-row active-label" : "clock-row" });
-    addText(root, item.miso, x + 124, rowY, { class: active ? "clock-row active-label" : "clock-row" });
+    addText(root, item.mosi, x + 66, rowY, { class: active ? "clock-row active-label" : "clock-row" });
+    addText(root, item.miso, x + 118, rowY, { class: active ? "clock-row active-label" : "clock-row" });
   }
 }
 
 function drawPressureObject(root) {
   const x = colX(demo.col);
   const y = rowY(demo.objectRow);
+  const radius = Math.max(14, Math.min(42, demo.objectSize / 3.2));
   const g = svg("g", { class: "pressure-object", transform: `translate(${x} ${y})` });
-  g.appendChild(svg("circle", { cx: 0, cy: 0, r: 18 }));
+  g.appendChild(svg("circle", { cx: 0, cy: 0, r: radius }));
   g.appendChild(svg("circle", { cx: 0, cy: 0, r: 7, class: "pressure-core" }));
   addText(g, "object", 0, -24, { class: "object-label", "text-anchor": "middle" });
   root.appendChild(g);
@@ -366,7 +372,8 @@ async function updateDemo() {
 function syncFromControls() {
   demo.row = Number(rowSelect.value);
   demo.col = Number(colSelect.value);
-  demo.force = Number(forceSelect.value);
+  demo.objectSize = Number(objectSizeRange.value);
+  demo.objectMass = Number(objectMassRange.value);
   updateDemo();
 }
 
@@ -389,7 +396,8 @@ function toggleAutoScan() {
 
 rowSelect.addEventListener("input", syncFromControls);
 colSelect.addEventListener("input", syncFromControls);
-forceSelect.addEventListener("input", syncFromControls);
+objectSizeRange.addEventListener("input", syncFromControls);
+objectMassRange.addEventListener("input", syncFromControls);
 svgEl.addEventListener("pointerdown", beginObjectPlacement);
 window.addEventListener("pointermove", updateObjectPlacement);
 window.addEventListener("pointerup", endObjectPlacement);

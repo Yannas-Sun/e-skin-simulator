@@ -18,7 +18,7 @@ class FSRReadoutProgram:
     def create(cls) -> "FSRReadoutProgram":
         return cls(dmux=DMUX(), array=FSRArray(), adc=ADC(), spi=SPIBus())
 
-    def tick(self, selected_row: int, pressed_row: int, pressed_col: int, force_percent: float) -> dict:
+    def tick(self, selected_row: int, pressed_row: int, pressed_col: int, object_size: float, object_mass: float) -> dict:
         # Address phase: MCU drives A1-A4, DMUX decodes exactly one row.
         self.dmux.set_selected_row(selected_row)
         address_bits = self.dmux.address_bits
@@ -29,7 +29,8 @@ class FSRReadoutProgram:
             dmux=self.dmux,
             pressed_row=pressed_row,
             pressed_col=pressed_col,
-            force_percent=force_percent,
+            object_size=object_size,
+            object_mass=object_mass,
         )
 
         # Conversion phase: the ADC samples all 16 column nodes in parallel.
@@ -57,14 +58,16 @@ class FSRReadoutProgram:
         clock_trace = self.clock_trace(
             pressed_row=pressed_row,
             pressed_col=pressed_col,
-            force_percent=force_percent,
+            object_size=object_size,
+            object_mass=object_mass,
         )
 
         return {
             "row": self.dmux.selected_row,
             "objectRow": pressed_row,
             "pressedCol": pressed_col,
-            "force": force_percent,
+            "objectSize": object_size,
+            "objectMass": object_mass,
             "address": {
                 "value": self.dmux.address,
                 "bits": [
@@ -84,7 +87,7 @@ class FSRReadoutProgram:
             "clockTrace": clock_trace,
         }
 
-    def clock_trace(self, pressed_row: int, pressed_col: int, force_percent: float) -> list[dict]:
+    def clock_trace(self, pressed_row: int, pressed_col: int, object_size: float, object_mass: float) -> list[dict]:
         trace = []
         saved_row = self.dmux.selected_row
         for row in range(1, self.dmux.outputs + 1):
@@ -93,19 +96,23 @@ class FSRReadoutProgram:
                 dmux=self.dmux,
                 pressed_row=pressed_row,
                 pressed_col=pressed_col,
-                force_percent=force_percent,
+                object_size=object_size,
+                object_mass=object_mass,
             )
             samples = self.adc.sample_parallel([node["nodeVoltage"] for node in nodes])
             words = [sample["code"] for sample in samples]
             active_word = words[pressed_col - 1]
+            mosi_word = 0b10000000 | (row - 1)
             trace.append(
                 {
                     "clk": row,
                     "row": row,
                     "address": "".join(str(bit) for bit in reversed(self.dmux.address_bits)),
                     "adcInput": f"C1-C16, C{pressed_col}={nodes[pressed_col - 1]['nodeVoltage']:.2f}V",
-                    "mosi": f"RD R{row:02d}",
-                    "miso": f"C{pressed_col:02d}={active_word:04d}",
+                    "mosi": format(mosi_word, "08b"),
+                    "miso": format(active_word, "012b"),
+                    "mosiLabel": f"read row {row}",
+                    "misoLabel": f"C{pressed_col} code {active_word}",
                     "spiOut": f"MISO[{pressed_col}]={active_word}",
                 }
             )
@@ -113,9 +120,10 @@ class FSRReadoutProgram:
         return trace
 
 
-def run_fsr_readout(row: int, col: int, force: float, object_row: int | None = None) -> dict:
+def run_fsr_readout(row: int, col: int, force: float, object_row: int | None = None, object_size: float = 54.0, object_mass: float | None = None) -> dict:
     row = max(1, min(16, int(row)))
     object_row = row if object_row is None else max(1, min(16, int(object_row)))
     col = max(1, min(16, int(col)))
-    force = max(0.0, min(100.0, float(force)))
-    return FSRReadoutProgram.create().tick(row, object_row, col, force)
+    object_size = max(20.0, min(140.0, float(object_size)))
+    object_mass = max(0.0, min(1000.0, float(force) * 10.0 if object_mass is None else float(object_mass)))
+    return FSRReadoutProgram.create().tick(row, object_row, col, object_size, object_mass)

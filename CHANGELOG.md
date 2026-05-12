@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-05-12 - FSR Object Controls and Binary SPI
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Feature]** Added dashboard-style object controls to the FSR demo.
+   - The placed FSR object now has adjustable size and mass.
+   - Object size changes the pressure footprint and object mass changes pressure intensity.
+
+2. **[Logic]** Updated the Python FSR pressure model.
+   - The virtual FSR array now distributes pressure across rows and columns from the object's footprint.
+   - The sampler accepts object size and mass instead of only a single force percentage.
+
+3. **[Logic]** Switched SPI trace values to binary.
+   - MOSI now displays an 8-bit binary row-read command.
+   - MISO now displays the 12-bit binary ADC code returned for the object column.
+
 ## 2026-05-12 - FSR Pressure Object Scan
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

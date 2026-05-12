@@ -136,25 +136,28 @@ class FSRArray:
         self.load = Resistor(load_ohms)
         self.fsr = FSR()
 
-    def force_at(self, row: int, col: int, pressed_row: int, pressed_col: int, force_percent: float) -> float:
-        if row != pressed_row:
+    def force_at(self, row: int, col: int, pressed_row: int, pressed_col: int, object_size: float, object_mass: float) -> float:
+        peak_force = max(0.0, min(100.0, object_mass / 10.0))
+        radius_cells = max(0.55, min(3.6, object_size / 34.0))
+        row_scale = 23.0 / 40.0
+        distance = (((row - pressed_row) * row_scale) ** 2 + (col - pressed_col) ** 2) ** 0.5
+        if distance > radius_cells + 1.6:
             return 0.0
-        distance = abs(col - pressed_col)
-        if distance == 0:
-            return force_percent
-        return max(0.0, force_percent * 0.08 * (2.718281828 ** (-distance / 2.5)))
+        if distance <= radius_cells:
+            return peak_force * (1.0 - 0.42 * (distance / radius_cells))
+        return peak_force * 0.12 * (2.718281828 ** (-(distance - radius_cells) / 0.65))
 
     def divider_voltage(self, row_voltage: float, fsr_ohms: float) -> float:
         if row_voltage <= 0:
             return 0.0
         return row_voltage * (self.load.ohms / (fsr_ohms + self.load.ohms))
 
-    def read_row(self, dmux: DMUX, pressed_row: int, pressed_col: int, force_percent: float) -> list[dict[str, int | float | bool]]:
+    def read_row(self, dmux: DMUX, pressed_row: int, pressed_col: int, object_size: float, object_mass: float) -> list[dict[str, int | float | bool]]:
         row = dmux.selected_row
         row_voltage = dmux.row_voltage(row)
         readings: list[dict[str, int | float | bool]] = []
         for col in range(1, self.cols + 1):
-            force = self.force_at(row, col, pressed_row, pressed_col, force_percent)
+            force = self.force_at(row, col, pressed_row, pressed_col, object_size, object_mass)
             resistance = self.fsr.resistance(force)
             voltage = self.divider_voltage(row_voltage, resistance)
             readings.append(

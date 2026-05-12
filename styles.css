@@ -815,7 +815,7 @@ h2 {
 .clock-row {
   fill: #53605c;
   font-family: Consolas, "Liberation Mono", monospace;
-  font-size: 10px;
+  font-size: 9px;
 }
 
 .signal-flow {
