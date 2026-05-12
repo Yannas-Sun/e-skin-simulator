@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-05-12 - Persistent MISO Heatmap Cache
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Kept previous MISO heatmap data while moving the FSR object.
+   - Moving the object or changing object settings no longer clears the received heatmap.
+   - A row updates only when that row is scanned again and a new MISO frame is received.
+
 ## 2026-05-12 - MISO-Driven FSR Heatmap
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

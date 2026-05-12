@@ -350,7 +350,6 @@ function placeObjectFromPoint(point) {
   const row = clamp(Math.round((point.y - (layout.arrayY + 28)) / 23) + 1, 1, 16);
   demo.objectRow = row;
   demo.col = col;
-  clearReceivedHeatmap();
   updateDemo();
 }
 
@@ -388,7 +387,6 @@ function syncFromControls() {
   demo.objectSize = Number(objectSizeRange.value);
   demo.objectMass = Number(objectMassRange.value);
   demo.refreshRate = Number(refreshRateRange.value);
-  clearReceivedHeatmap();
   restartAutoScanTimer();
   updateDemo();
 }
