@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from fsr_hardware import ADC, DMUX, FSRArray, SPIBus
+from .fsr_hardware import ADC, DMUX, FSRArray, SPIBus
 
 
 @dataclass

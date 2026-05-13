@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-05-13 - Project Folder Reorganization
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Structure]** Split the project into clear backend, frontend, and documentation folders.
+   - Python server and hardware simulation files now live under `backend/`.
+   - HTML, CSS, and JavaScript assets now live under `frontend/`.
+   - Reference PDFs now live under `docs/references/`.
+
+2. **[Compatibility]** Added a root `server.py` launcher.
+   - The project can still be started with `python server.py` from the repository root.
+
+3. **[Docs]** Updated the README project structure section.
+   - The file map now reflects the reorganized folder layout.
+
 ## 2026-05-12 - Persistent MISO Heatmap Cache
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

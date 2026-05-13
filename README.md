@@ -66,15 +66,23 @@ Use the HTTP address above rather than opening `index.html` directly, because th
    - `Delete` / `Backspace`
 8. Click `FSR Demo` to inspect the hardware readout path for one 16 x 16 FSR layer.
 
-## Files
+## Project Structure
 
-- `server.py` - Python HTTP server and simulation API
-- `index.html` - application layout
-- `fsr-demo.html` - interactive FSR readout circuit demo
-- `fsr_hardware.py` - virtual DMUX, ADC, resistor, FSR, and FSR array hardware primitives
-- `fsr_sampler.py` - programmable scan controller that calls the virtual hardware, similar to firmware or Verilog-style sequencing
-- `styles.css` - user interface styling
-- `app.js` - workspace interaction, rendering, and API calls
-- `fsr-demo.js` - DMUX, FSR, ADC, and MCU readout visualization logic
-- `E_skin_plan_report.pdf` - source planning report and project background
-- `CHANGELOG.md` - ordered record of pushed changes
+```text
+software-simulation/
+  server.py                    # root launcher; keeps `python server.py` working
+  backend/
+    server.py                  # Python HTTP server and simulation API
+    fsr_hardware.py            # virtual DMUX, ADC, resistor, FSR, and FSR array primitives
+    fsr_sampler.py             # programmable scan controller using the virtual hardware
+  frontend/
+    index.html                 # module-network dashboard
+    fsr-demo.html              # FSR readout circuit demo
+    styles.css                 # shared UI styling
+    js/
+      app.js                   # dashboard interaction, rendering, and API calls
+      fsr-demo.js              # FSR visualization and MISO-driven heatmap logic
+  docs/
+    references/                # project reports and source PDFs
+  CHANGELOG.md                 # ordered record of pushed changes
+```
