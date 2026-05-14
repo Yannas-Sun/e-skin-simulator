@@ -13,8 +13,8 @@
           <p class="eyebrow">Hardware readout demo</p>
           <h1>16 x 16 FSR Array: DMUX to ADC to MCU</h1>
           <p>
-            A row-select demultiplexer energizes one FSR row at a time. The 16 columns form voltage dividers
-            through 10 kOhm pull-down resistors, the ADC samples all columns, and the MCU receives the frame over SPI.
+            A row-select demultiplexer energizes one FSR row at a time. The ADC is commanded over MOSI to scan
+            AIN0-AIN15, writes SAR results into FIFO, pulls EOC low, then streams FIFO words back over MISO.
           </p>
         </div>
         <a class="text-button link-button" href="index.html">Back to Dashboard</a>
@@ -89,7 +89,7 @@
               <li>DMUX drives one row electrode with Vcc.</li>
               <li>Each column is pulled to ground through 10 kOhm.</li>
               <li>Pressed FSR cells reduce resistance and raise column voltage.</li>
-              <li>ADC samples C1-C16 in parallel and returns values via SPI.</li>
+              <li>MCU sends an ADC scan command, waits for EOC low, then clocks FIFO values out on MISO.</li>
             </ul>
           </div>
         </aside>

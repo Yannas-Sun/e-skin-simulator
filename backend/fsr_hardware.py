@@ -65,27 +65,75 @@ class DMUX:
 
 
 class ADC:
-    """Parallel 16-channel ADC model."""
+    """16-channel ADC model with command, SAR conversion, FIFO, and active-low EOC."""
 
     def __init__(self, channels: int = 16, bits: int = ADC_BITS, vref: float = VCC) -> None:
         self.channels = channels
         self.bits = bits
         self.vref = vref
         self.max_code = (1 << bits) - 1
+        self.fifo: list[dict[str, int | float | str]] = []
+        self.eoc = 1
 
     def encode(self, voltage: float) -> int:
         clamped = max(0.0, min(self.vref, voltage))
         return round((clamped / self.vref) * self.max_code)
 
-    def sample_parallel(self, voltages: list[float]) -> list[dict[str, int | float]]:
-        return [
-            {
-                "channel": index + 1,
-                "voltage": voltage,
-                "code": self.encode(voltage),
-            }
-            for index, voltage in enumerate(voltages[: self.channels])
-        ]
+    def scan_command(self, start_channel: int = 0, scan_mode: int = 0b11, x_bit: int = 0) -> dict:
+        channel = max(0, min(self.channels - 1, start_channel))
+        mode = max(0, min(0b11, scan_mode))
+        value = 0b10000000 | (channel << 3) | (mode << 1) | (1 if x_bit else 0)
+        bits = {
+            "bit7": 1,
+            "CH3": (channel >> 3) & 1,
+            "CH2": (channel >> 2) & 1,
+            "CH1": (channel >> 1) & 1,
+            "CH0": channel & 1,
+            "SC1": (mode >> 1) & 1,
+            "SC0": mode & 1,
+            "X": 1 if x_bit else 0,
+        }
+        return {
+            "value": value,
+            "binary": format(value, "08b"),
+            "hex": f"0x{value:02X}",
+            "startChannel": channel,
+            "scanMode": mode,
+            "scanModeLabel": "AIN0-AIN15 sequence" if channel == 0 and mode == 0b11 else "channel sequence",
+            "bits": bits,
+            "format": "bit7 CH3 CH2 CH1 CH0 SC1 SC0 X",
+        }
+
+    def sar_convert(self, channel: int, voltage: float) -> dict[str, int | float | str]:
+        return {
+            "channel": channel,
+            "ain": f"AIN{channel - 1}",
+            "voltage": voltage,
+            "code": self.encode(voltage),
+            "stage": "sample -> SAR convert -> FIFO",
+        }
+
+    def start_scan(self, voltages: list[float], command: dict | None = None) -> dict:
+        command = self.scan_command() if command is None else command
+        self.eoc = 1
+        self.fifo = []
+        conversions = []
+        for index, voltage in enumerate(voltages[: self.channels]):
+            conversion = self.sar_convert(index + 1, voltage)
+            self.fifo.append(conversion)
+            conversions.append(conversion)
+        self.eoc = 0
+        return {
+            "command": command,
+            "channels": [f"AIN{index}" for index in range(len(conversions))],
+            "conversions": conversions,
+            "fifoDepth": len(self.fifo),
+            "eoc": self.eoc,
+            "eocState": "LOW_CONVERSION_COMPLETE",
+        }
+
+    def read_fifo(self) -> list[dict[str, int | float | str]]:
+        return self.fifo.copy()
 
 
 class SPIBus:
@@ -111,10 +159,28 @@ class SPIBus:
             },
         }
 
-    def frame(self, row: int, words: list[int]) -> dict:
+    def frame(self, row: int, command: dict, words: list[int]) -> dict:
         return {
-            "summary": f"row {row}, 16 column words",
+            "summary": f"row {row}, ADC scan command then 16 FIFO words",
+            "command": command,
             "words": words,
+            "transactions": [
+                {
+                    "phase": "command",
+                    "cs": "LOW -> HIGH",
+                    "mosi": command["binary"],
+                    "miso": "idle",
+                    "description": "MCU selects ADC, sends the 8-bit scan command, then releases CS.",
+                },
+                {
+                    "phase": "read_fifo",
+                    "cs": "LOW -> HIGH",
+                    "sckPulses": len(words) * ADC_BITS,
+                    "mosi": "dummy clocks / no payload",
+                    "miso": "16 sequential 12-bit ADC words from FIFO",
+                    "description": "After EOC is low, MCU selects ADC again and clocks FIFO data out on MISO.",
+                },
+            ],
             "lines": [
                 {
                     "name": name,

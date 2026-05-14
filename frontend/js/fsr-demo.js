@@ -152,7 +152,12 @@ function drawCircuit() {
   spiFrame.textContent = [
     `ROW_SELECT = ${demo.hardware.address.value.toString(2).padStart(4, "0")}  // A1-A4`,
     `OBJECT = R${demo.objectRow},C${demo.col}  SIZE = ${demo.objectSize} mm  MASS = ${demo.objectMass} g`,
-    `ADC_CH[01..16] sampled simultaneously`,
+    `MOSI FORMAT: ${demo.hardware.spi.command.format}`,
+    `CS: LOW  MOSI: ${demo.hardware.spi.command.binary} (${demo.hardware.spi.command.hex})  CS: HIGH`,
+    `BITS: ${Object.entries(demo.hardware.spi.command.bits).map(([name, bit]) => `${name}=${bit}`).join(" ")}`,
+    `ADC: AIN0 -> AIN15 sample/SAR/FIFO`,
+    `EOC = ${demo.hardware.adc.eoc}  (${demo.hardware.adc.eocState})`,
+    `CS: LOW  SCK clocks FIFO  CS: HIGH`,
     `ADC_CH[${demo.col.toString().padStart(2, "0")}] = ${active.code.toString().padStart(4, " ")}`,
     ...demo.hardware.spi.lines.map((line) => `${line.name}: ${line.carries}`),
   ].join("\n");
@@ -303,7 +308,7 @@ function drawInfoFlow(root) {
   addStep(root, "1", "MCU sets row address", 72, 820);
   addStep(root, "2", "DMUX drives selected row", 335, 820);
   addStep(root, "3", "Column divider voltages change", 620, 820);
-  addStep(root, "4", "ADC samples and streams SPI", 945, 820);
+  addStep(root, "4", "ADC scans FIFO, then MISO streams", 945, 820);
 }
 
 function rowY(row) {

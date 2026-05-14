@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-05-14 - ADC FIFO Scan Logic
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Reworked the virtual ADC into a command-driven FIFO device.
+   - MCU now pulls CS low, sends a MOSI scan command for AIN0-AIN15, and releases CS.
+   - ADC then samples each channel, performs SAR conversion, writes results into FIFO, and pulls EOC low.
+   - MCU performs a second CS-low read phase and clocks the 16 FIFO words out on MISO.
+
+2. **[Logic]** Added the ADC MOSI command bit layout.
+   - The scan command now follows `bit7 CH3 CH2 CH1 CH0 SC1 SC0 X`.
+   - A full AIN0-AIN15 scan is represented as `10000110` with `CH=0000`, `SC=11`, and `X=0`.
+
+3. **[Feature]** Exposed ADC transaction details in the API response.
+   - Responses now include FIFO depth, EOC state, scan conversions, and SPI command/read transactions.
+
+4. **[Appearance]** Updated the FSR demo text to match the two-phase ADC behavior.
+   - The SPI frame display now shows command, conversion, EOC, and FIFO read phases.
+   - The demo now lists MOSI command format, binary value, hex value, and named bit fields.
+
 ## 2026-05-13 - Project Folder Reorganization
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

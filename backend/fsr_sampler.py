@@ -33,8 +33,10 @@ class FSRReadoutProgram:
             object_mass=object_mass,
         )
 
-        # Conversion phase: the ADC samples all 16 column nodes in parallel.
-        adc_samples = self.adc.sample_parallel([node["nodeVoltage"] for node in column_nodes])
+        # ADC phase: MCU commands a scan, then the ADC converts AIN0-AIN15 into its FIFO.
+        scan_command = self.adc.scan_command(start_channel=0, scan_mode=0b11, x_bit=0)
+        adc_scan = self.adc.start_scan([node["nodeVoltage"] for node in column_nodes], command=scan_command)
+        adc_samples = self.adc.read_fifo()
 
         columns = []
         for node, sample in zip(column_nodes, adc_samples):
@@ -50,9 +52,10 @@ class FSRReadoutProgram:
                 }
             )
 
-        # Transfer phase: SPI uses SCK, MOSI, MISO, and CS to move the ADC frame.
+        # Transfer phase: after EOC is low, MCU clocks FIFO words out on MISO.
         spi_frame = self.spi.frame(
             row=self.dmux.selected_row,
+            command=scan_command,
             words=[column["code"] for column in columns],
         )
         clock_trace = self.clock_trace(
@@ -80,7 +83,10 @@ class FSRReadoutProgram:
                 "channels": self.adc.channels,
                 "bits": self.adc.bits,
                 "vref": self.adc.vref,
-                "parallel": True,
+                "fifoDepth": len(self.adc.fifo),
+                "eoc": self.adc.eoc,
+                "eocState": "LOW_CONVERSION_COMPLETE" if self.adc.eoc == 0 else "HIGH_BUSY",
+                "scan": adc_scan,
             },
             "spi": spi_frame,
             "clockTrace": clock_trace,
@@ -98,20 +104,21 @@ class FSRReadoutProgram:
                 object_size=object_size,
                 object_mass=object_mass,
             )
-            samples = self.adc.sample_parallel([node["nodeVoltage"] for node in nodes])
-            words = [sample["code"] for sample in samples]
+            scan_command = self.adc.scan_command(start_channel=0, scan_mode=0b11, x_bit=0)
+            self.adc.start_scan([node["nodeVoltage"] for node in nodes], command=scan_command)
+            words = [sample["code"] for sample in self.adc.read_fifo()]
             active_word = words[pressed_col - 1]
-            mosi_word = 0b10000000 | (row - 1)
             trace.append(
                 {
                     "clk": row,
                     "row": row,
                     "address": "".join(str(bit) for bit in reversed(self.dmux.address_bits)),
                     "adcInput": f"C1-C16, C{pressed_col}={nodes[pressed_col - 1]['nodeVoltage']:.2f}V",
-                    "mosi": format(mosi_word, "08b"),
+                    "mosi": scan_command["binary"],
                     "miso": format(active_word, "012b"),
-                    "mosiLabel": f"read row {row}",
+                    "mosiLabel": f"{scan_command['hex']} scan AIN0-AIN15",
                     "misoLabel": f"C{pressed_col} code {active_word}",
+                    "eoc": 0,
                     "spiOut": f"MISO[{pressed_col}]={active_word}",
                 }
             )
