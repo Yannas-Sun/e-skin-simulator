@@ -10,11 +10,12 @@ const demo = {
   hardware: null,
   placingObject: false,
   spiPhase: "command",
+  spiPhaseIndex: 0,
   phaseTimer: null,
   receivedCodes: Array.from({ length: 16 }, () => Array(16).fill(null)),
 };
 
-const HEATMAP_DETECTION_CODE = 218;
+const HEATMAP_DETECTION_OFFSET = 2;
 
 const svgEl = document.getElementById("fsrCircuit");
 const objectSizeRange = document.getElementById("objectSizeRange");
@@ -129,7 +130,6 @@ async function requestHardwareState() {
 
 function drawCircuit() {
   if (!demo.hardware) return;
-  updateSpiPhase();
   svgEl.innerHTML = "";
   const columns = demo.hardware.columns;
   const active = columns[demo.col - 1];
@@ -224,7 +224,7 @@ function drawArray(root, columns) {
       const x = colX(col);
       const y = rowY(row);
       const code = receivedCode(row, col);
-      const covered = code !== null && code >= HEATMAP_DETECTION_CODE;
+      const covered = code !== null && code >= heatmapDetectionCode();
       const detected = row === demo.row && covered;
       root.appendChild(svg("rect", {
         x: x - 10,
@@ -288,7 +288,7 @@ function drawHardwareHeatmap(root) {
   for (let row = 1; row <= 16; row += 1) {
     for (let col = 1; col <= 16; col += 1) {
       const code = receivedCode(row, col);
-      const normalized = code === null ? 0 : Math.max(0, Math.min(1, code / 4095));
+      const normalized = heatmapIntensity(code);
       const hue = 205 - normalized * 205;
       const lightness = code === null ? 97 : 94 - normalized * 44;
       root.appendChild(svg("rect", {
@@ -301,7 +301,7 @@ function drawHardwareHeatmap(root) {
       }));
     }
   }
-  addText(root, `scan row R${demo.row}`, x0, y0 + layout.heatmapSize + 22, { class: "clock-head" });
+  addText(root, `scan row R${demo.row}, threshold ${heatmapDetectionCode()}`, x0, y0 + layout.heatmapSize + 22, { class: "clock-head" });
 }
 
 function drawPressureObject(root) {
@@ -333,6 +333,17 @@ function receivedCode(row, col) {
   return demo.receivedCodes[row - 1]?.[col - 1] ?? null;
 }
 
+function heatmapDetectionCode() {
+  return (demo.hardware?.adc?.idleCode ?? 212) + HEATMAP_DETECTION_OFFSET;
+}
+
+function heatmapIntensity(code) {
+  if (code === null) return 0;
+  const idle = demo.hardware?.adc?.idleCode ?? 212;
+  const signal = Math.max(0, code - idle);
+  return Math.max(0, Math.min(1, signal / 1200));
+}
+
 function receiveMisoFrame(hardware) {
   const rowIndex = hardware.row - 1;
   const words = hardware.spi?.words || [];
@@ -341,12 +352,8 @@ function receiveMisoFrame(hardware) {
 }
 
 function updateSpiPhase() {
-  const clock = demo.hardware?.clock;
-  const phases = clock?.phases || [];
-  const rowPeriod = clock?.rowPeriodMs || Math.max(1, 1000 / demo.refreshRate / 16);
-  const position = performance.now() % rowPeriod;
-  const active = phases.find((phase) => position >= phase.startMs && position < phase.endMs);
-  demo.spiPhase = active?.name || "read_fifo";
+  const order = demo.hardware?.spi?.phaseOrder || ["command", "conversion", "read_fifo"];
+  demo.spiPhase = order[demo.spiPhaseIndex % order.length] || "command";
 }
 
 function activeSpiLines() {
@@ -418,6 +425,7 @@ function syncFromControls() {
   demo.objectMass = Number(objectMassRange.value);
   demo.refreshRate = Number(refreshRateRange.value);
   restartAutoScanTimer();
+  startSpiPhaseAnimation();
   updateDemo();
 }
 
@@ -444,8 +452,11 @@ function startSpiPhaseAnimation() {
   if (demo.phaseTimer) window.clearInterval(demo.phaseTimer);
   demo.phaseTimer = window.setInterval(() => {
     if (!demo.hardware) return;
+    const order = demo.hardware?.spi?.phaseOrder || ["command", "conversion", "read_fifo"];
+    demo.spiPhaseIndex = (demo.spiPhaseIndex + 1) % order.length;
+    updateSpiPhase();
     drawCircuit();
-  }, 120);
+  }, demo.refreshRate > 10 ? 260 : 420);
 }
 
 objectSizeRange.addEventListener("input", syncFromControls);

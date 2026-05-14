@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-05-14 - Visible SPI Phase and Heatmap Scaling
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Appearance]** Made SPI line changes visible instead of using real sub-millisecond timing directly.
+   - The visual layer now cycles through command, conversion, and FIFO-read phases at a human-readable pace.
+   - The underlying backend clock still reports the real refresh-rate-derived timing.
+
+2. **[Appearance]** Improved FSR heatmap sensitivity.
+   - Heatmap color now subtracts the ADC idle baseline before scaling intensity.
+   - Detection threshold now tracks the idle ADC code plus a small offset, so lighter loads become visible.
+
 ## 2026-05-14 - SPI Phase Animation and Hardware Clock
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
