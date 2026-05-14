@@ -267,12 +267,38 @@ class SPIBus:
 
     def frame(self, row: int, command: dict, words: list[int], clock: Clock) -> dict:
         clock_state = clock.snapshot()
+        line_state = {
+            "SCK": {
+                "active": True,
+                "amount": 8 + len(words) * ADC_BITS,
+                "unit": "pulse",
+                "label": f"{8 + len(words) * ADC_BITS} pulses",
+            },
+            "MOSI": {
+                "active": True,
+                "amount": len(command["binary"]),
+                "unit": "bit",
+                "label": command["binary"],
+            },
+            "MISO": {
+                "active": len(words) > 0,
+                "amount": len(words) * ADC_BITS,
+                "unit": "bit",
+                "label": f"{len(words)} x {ADC_BITS}-bit",
+            },
+            "CS": {
+                "active": True,
+                "amount": 2,
+                "unit": "assertion",
+                "label": "2 CS windows",
+            },
+        }
         return {
             "summary": f"row {row}, ADC scan command then 16 FIFO words",
             "command": command,
             "words": words,
             "clock": clock_state,
-            "phaseOrder": ["command", "conversion", "read_fifo"],
+            "lineState": line_state,
             "transactions": [
                 {
                     "phase": "command",

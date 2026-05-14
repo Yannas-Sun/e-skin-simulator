@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-05-14 - State-Driven SPI Line Highlighting
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Replaced animation-driven SPI highlighting with MCU transaction state.
+   - The backend now reports per-line activity for the current row transfer.
+   - SCK, MOSI, MISO, and CS are highlighted only when the current MCU row transaction uses them.
+
+2. **[Appearance]** Removed the phase animation from the SPI bus display.
+   - SPI lines now behave like A1-A4: a static hardware-state view for the current scan row.
+   - The circuit view labels each active SPI line with its current transferred amount or value.
+
 ## 2026-05-14 - Softer FSR Heatmap Gradient
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

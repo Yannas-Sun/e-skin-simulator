@@ -9,9 +9,6 @@ const demo = {
   timer: null,
   hardware: null,
   placingObject: false,
-  spiPhase: "command",
-  spiPhaseIndex: 0,
-  phaseTimer: null,
   receivedCodes: Array.from({ length: 16 }, () => Array(16).fill(null)),
 };
 
@@ -184,7 +181,7 @@ function drawCircuit() {
     `CS edges      ${rates.CS.edgesPerFrame.toFixed(0).padStart(5)} edge      ${rates.CS.edgesPerSecond.toFixed(0)} edge/s`,
     ``,
     `MOSI command: ${demo.hardware.spi.command.binary}`,
-    `SPI phase: ${demo.spiPhase}`,
+    `Line state source: current MCU row transaction`,
   ].join("\n");
 }
 
@@ -289,11 +286,13 @@ function drawSpiBus(root) {
     const item = lines[i];
     const y = y0 + i * 20;
     const active = activeLines.has(item.name);
-    const className = active ? `spi-wire spi-active signal-flow spi-${item.name.toLowerCase()}` : "spi-wire";
+    const className = active ? `spi-wire spi-active spi-${item.name.toLowerCase()}` : "spi-wire";
     line(root, layout.mcuX + layout.mcuW, y, layout.adcX + 1, y, className);
     addText(root, item.name, layout.mcuX + layout.mcuW + 12, y + 5, { class: active ? "active-label" : "pin-label" });
+    const state = demo.hardware.spi.lineState?.[item.name];
+    if (state?.active) addText(root, state.label, layout.adcX + 8, y + 5, { class: "clock-head" });
   }
-  addText(root, `phase: ${demo.spiPhase}`, layout.mcuX + layout.mcuW + 12, y0 + lines.length * 20 + 14, { class: "clock-head" });
+  addText(root, "state: current row transfer", layout.mcuX + layout.mcuW + 12, y0 + lines.length * 20 + 14, { class: "clock-head" });
 }
 
 function drawHardwareHeatmap(root) {
@@ -368,15 +367,9 @@ function receiveMisoFrame(hardware) {
   demo.receivedCodes[rowIndex] = words.slice(0, 16);
 }
 
-function updateSpiPhase() {
-  const order = demo.hardware?.spi?.phaseOrder || ["command", "conversion", "read_fifo"];
-  demo.spiPhase = order[demo.spiPhaseIndex % order.length] || "command";
-}
-
 function activeSpiLines() {
-  if (demo.spiPhase === "command") return new Set(["CS", "MOSI", "SCK"]);
-  if (demo.spiPhase === "read_fifo") return new Set(["CS", "MISO", "SCK"]);
-  return new Set();
+  const states = demo.hardware?.spi?.lineState || {};
+  return new Set(Object.entries(states).filter(([, state]) => state.active).map(([name]) => name));
 }
 
 function clearReceivedHeatmap() {
@@ -442,7 +435,6 @@ function syncFromControls() {
   demo.objectMass = Number(objectMassRange.value);
   demo.refreshRate = Number(refreshRateRange.value);
   restartAutoScanTimer();
-  startSpiPhaseAnimation();
   updateDemo();
 }
 
@@ -465,17 +457,6 @@ function restartAutoScanTimer() {
   demo.timer = window.setInterval(stepRow, Math.max(1, 1000 / demo.refreshRate));
 }
 
-function startSpiPhaseAnimation() {
-  if (demo.phaseTimer) window.clearInterval(demo.phaseTimer);
-  demo.phaseTimer = window.setInterval(() => {
-    if (!demo.hardware) return;
-    const order = demo.hardware?.spi?.phaseOrder || ["command", "conversion", "read_fifo"];
-    demo.spiPhaseIndex = (demo.spiPhaseIndex + 1) % order.length;
-    updateSpiPhase();
-    drawCircuit();
-  }, demo.refreshRate > 10 ? 260 : 420);
-}
-
 objectSizeRange.addEventListener("input", syncFromControls);
 objectMassRange.addEventListener("input", syncFromControls);
 refreshRateRange.addEventListener("input", syncFromControls);
@@ -485,5 +466,4 @@ window.addEventListener("pointerup", endObjectPlacement);
 document.getElementById("singleStep").addEventListener("click", stepRow);
 document.getElementById("autoScan").addEventListener("click", toggleAutoScan);
 
-startSpiPhaseAnimation();
 updateDemo();
