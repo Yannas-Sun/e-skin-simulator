@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-05-14 - SPI Phase Animation and Hardware Clock
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Added a unified backend hardware clock derived from the selected refresh rate.
+   - The clock now exposes frame period, row period, SPI bits per row, and derived SCK frequency.
+   - ADC/SPI transaction timing is divided into command, conversion, and FIFO-read phases.
+
+2. **[Appearance]** Animated SPI lines according to the active transfer phase.
+   - Command phase highlights CS, MOSI, and SCK.
+   - FIFO read phase highlights CS, MISO, and SCK.
+   - The demo now displays the current SPI phase and derived SCK rate.
+
+3. **[Logic]** Lowered the FSR demo heatmap detection threshold.
+   - Hardware heatmap cells now become active at a lower ADC code, making lighter object loads visible sooner.
+
 ## 2026-05-14 - ADC FIFO Scan Logic
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

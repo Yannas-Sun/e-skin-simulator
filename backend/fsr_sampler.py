@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .fsr_hardware import ADC, DMUX, FSRArray, SPIBus
+from .fsr_hardware import ADC, Clock, DMUX, FSRArray, SPIBus
 
 
 @dataclass
@@ -13,10 +13,11 @@ class FSRReadoutProgram:
     array: FSRArray
     adc: ADC
     spi: SPIBus
+    clock: Clock
 
     @classmethod
-    def create(cls) -> "FSRReadoutProgram":
-        return cls(dmux=DMUX(), array=FSRArray(), adc=ADC(), spi=SPIBus())
+    def create(cls, refresh_rate: float = 10.0) -> "FSRReadoutProgram":
+        return cls(dmux=DMUX(), array=FSRArray(), adc=ADC(), spi=SPIBus(), clock=Clock(refresh_rate))
 
     def tick(self, selected_row: int, pressed_row: int, pressed_col: int, object_size: float, object_mass: float) -> dict:
         # Address phase: MCU drives A1-A4, DMUX decodes exactly one row.
@@ -57,6 +58,7 @@ class FSRReadoutProgram:
             row=self.dmux.selected_row,
             command=scan_command,
             words=[column["code"] for column in columns],
+            clock=self.clock,
         )
         clock_trace = self.clock_trace(
             pressed_row=pressed_row,
@@ -83,12 +85,14 @@ class FSRReadoutProgram:
                 "channels": self.adc.channels,
                 "bits": self.adc.bits,
                 "vref": self.adc.vref,
+                "idleCode": self.adc.encode(0.0),
                 "fifoDepth": len(self.adc.fifo),
                 "eoc": self.adc.eoc,
                 "eocState": "LOW_CONVERSION_COMPLETE" if self.adc.eoc == 0 else "HIGH_BUSY",
                 "scan": adc_scan,
             },
             "spi": spi_frame,
+            "clock": self.clock.snapshot(),
             "clockTrace": clock_trace,
         }
 
@@ -126,10 +130,11 @@ class FSRReadoutProgram:
         return trace
 
 
-def run_fsr_readout(row: int, col: int, force: float, object_row: int | None = None, object_size: float = 72.0, object_mass: float | None = None) -> dict:
+def run_fsr_readout(row: int, col: int, force: float, object_row: int | None = None, object_size: float = 72.0, object_mass: float | None = None, refresh_rate: float = 10.0) -> dict:
     row = max(1, min(16, int(row)))
     object_row = row if object_row is None else max(1, min(16, int(object_row)))
     col = max(1, min(16, int(col)))
     object_size = max(20.0, min(240.0, float(object_size)))
     object_mass = max(0.0, min(1000.0, float(force) * 10.0 if object_mass is None else float(object_mass)))
-    return FSRReadoutProgram.create().tick(row, object_row, col, object_size, object_mass)
+    refresh_rate = max(1.0, min(700.0, float(refresh_rate)))
+    return FSRReadoutProgram.create(refresh_rate).tick(row, object_row, col, object_size, object_mass)

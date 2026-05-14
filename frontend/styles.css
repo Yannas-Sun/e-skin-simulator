@@ -799,6 +799,27 @@ h2 {
   vector-effect: non-scaling-stroke;
 }
 
+.spi-active {
+  stroke-width: 4;
+  opacity: 1;
+}
+
+.spi-mosi {
+  stroke: #2f7b63;
+}
+
+.spi-miso {
+  stroke: #d69d28;
+}
+
+.spi-sck {
+  stroke: #1e8aa5;
+}
+
+.spi-cs {
+  stroke: #d75745;
+}
+
 .clock-panel {
   fill: #fbfdfc;
   stroke: #c9d7d2;

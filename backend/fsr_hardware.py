@@ -8,6 +8,52 @@ ADC_BITS = 12
 ADC_MAX_CODE = (1 << ADC_BITS) - 1
 
 
+@dataclass
+class Clock:
+    """Unified hardware clock derived from the selected refresh rate."""
+
+    refresh_hz: float = 10.0
+    rows_per_frame: int = 16
+    adc_channels: int = 16
+    adc_bits: int = ADC_BITS
+
+    def __post_init__(self) -> None:
+        self.refresh_hz = max(1.0, min(700.0, float(self.refresh_hz)))
+
+    @property
+    def frame_period_ms(self) -> float:
+        return 1000.0 / self.refresh_hz
+
+    @property
+    def row_period_ms(self) -> float:
+        return self.frame_period_ms / self.rows_per_frame
+
+    @property
+    def spi_bits_per_row(self) -> int:
+        return 8 + self.adc_channels * self.adc_bits
+
+    @property
+    def spi_clock_hz(self) -> float:
+        return self.spi_bits_per_row / max(0.001, self.row_period_ms / 1000.0)
+
+    def snapshot(self) -> dict:
+        row_ms = self.row_period_ms
+        command_end = row_ms * 0.18
+        conversion_end = row_ms * 0.58
+        return {
+            "refreshHz": self.refresh_hz,
+            "framePeriodMs": self.frame_period_ms,
+            "rowPeriodMs": row_ms,
+            "spiBitsPerRow": self.spi_bits_per_row,
+            "spiClockHz": self.spi_clock_hz,
+            "phases": [
+                {"name": "command", "startMs": 0.0, "endMs": command_end, "activeLines": ["CS", "MOSI", "SCK"]},
+                {"name": "conversion", "startMs": command_end, "endMs": conversion_end, "activeLines": ["EOC"]},
+                {"name": "read_fifo", "startMs": conversion_end, "endMs": row_ms, "activeLines": ["CS", "MISO", "SCK"]},
+            ],
+        }
+
+
 @dataclass(frozen=True)
 class Resistor:
     ohms: float
@@ -159,18 +205,29 @@ class SPIBus:
             },
         }
 
-    def frame(self, row: int, command: dict, words: list[int]) -> dict:
+    def frame(self, row: int, command: dict, words: list[int], clock: Clock) -> dict:
+        clock_state = clock.snapshot()
         return {
             "summary": f"row {row}, ADC scan command then 16 FIFO words",
             "command": command,
             "words": words,
+            "clock": clock_state,
+            "phaseOrder": ["command", "conversion", "read_fifo"],
             "transactions": [
                 {
                     "phase": "command",
                     "cs": "LOW -> HIGH",
                     "mosi": command["binary"],
                     "miso": "idle",
+                    "activeLines": ["CS", "MOSI", "SCK"],
                     "description": "MCU selects ADC, sends the 8-bit scan command, then releases CS.",
+                },
+                {
+                    "phase": "conversion",
+                    "cs": "HIGH",
+                    "eoc": "HIGH -> LOW",
+                    "activeLines": ["EOC"],
+                    "description": "ADC scans AIN0-AIN15, performs SAR conversion, fills FIFO, then pulls EOC low.",
                 },
                 {
                     "phase": "read_fifo",
@@ -178,6 +235,7 @@ class SPIBus:
                     "sckPulses": len(words) * ADC_BITS,
                     "mosi": "dummy clocks / no payload",
                     "miso": "16 sequential 12-bit ADC words from FIFO",
+                    "activeLines": ["CS", "MISO", "SCK"],
                     "description": "After EOC is low, MCU selects ADC again and clocks FIFO data out on MISO.",
                 },
             ],

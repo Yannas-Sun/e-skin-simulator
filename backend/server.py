@@ -184,6 +184,7 @@ class Handler(SimpleHTTPRequestHandler):
             object_row=int(payload.get("objectRow", payload.get("row", 1))),
             object_size=float(payload.get("objectSize", 72)),
             object_mass=float(payload.get("objectMass", payload.get("force", 62) * 10)),
+            refresh_rate=float(payload.get("refreshRate", 10)),
         )
         self.write_json(response)
 

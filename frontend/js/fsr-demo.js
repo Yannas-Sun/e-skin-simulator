@@ -9,8 +9,12 @@ const demo = {
   timer: null,
   hardware: null,
   placingObject: false,
+  spiPhase: "command",
+  phaseTimer: null,
   receivedCodes: Array.from({ length: 16 }, () => Array(16).fill(null)),
 };
+
+const HEATMAP_DETECTION_CODE = 218;
 
 const svgEl = document.getElementById("fsrCircuit");
 const objectSizeRange = document.getElementById("objectSizeRange");
@@ -125,6 +129,7 @@ async function requestHardwareState() {
 
 function drawCircuit() {
   if (!demo.hardware) return;
+  updateSpiPhase();
   svgEl.innerHTML = "";
   const columns = demo.hardware.columns;
   const active = columns[demo.col - 1];
@@ -158,6 +163,8 @@ function drawCircuit() {
     `ADC: AIN0 -> AIN15 sample/SAR/FIFO`,
     `EOC = ${demo.hardware.adc.eoc}  (${demo.hardware.adc.eocState})`,
     `CS: LOW  SCK clocks FIFO  CS: HIGH`,
+    `CLK: refresh ${demo.hardware.clock.refreshHz.toFixed(0)} Hz, SCK ${Math.round(demo.hardware.clock.spiClockHz)} Hz`,
+    `SPI PHASE: ${demo.spiPhase}`,
     `ADC_CH[${demo.col.toString().padStart(2, "0")}] = ${active.code.toString().padStart(4, " ")}`,
     ...demo.hardware.spi.lines.map((line) => `${line.name}: ${line.carries}`),
   ].join("\n");
@@ -217,7 +224,7 @@ function drawArray(root, columns) {
       const x = colX(col);
       const y = rowY(row);
       const code = receivedCode(row, col);
-      const covered = code !== null && code > 230;
+      const covered = code !== null && code >= HEATMAP_DETECTION_CODE;
       const detected = row === demo.row && covered;
       root.appendChild(svg("rect", {
         x: x - 10,
@@ -260,13 +267,16 @@ function drawAdc(root, columns) {
 function drawSpiBus(root) {
   const lines = demo.hardware.spi.lines;
   const y0 = layout.adcY + 18;
+  const activeLines = activeSpiLines();
   for (let i = 0; i < lines.length; i += 1) {
     const item = lines[i];
     const y = y0 + i * 20;
-    const active = item.name === "MISO";
-    line(root, layout.mcuX + layout.mcuW, y, layout.adcX + 1, y, active ? "spi-wire active-wire" : "spi-wire");
+    const active = activeLines.has(item.name);
+    const className = active ? `spi-wire spi-active signal-flow spi-${item.name.toLowerCase()}` : "spi-wire";
+    line(root, layout.mcuX + layout.mcuW, y, layout.adcX + 1, y, className);
     addText(root, item.name, layout.mcuX + layout.mcuW + 12, y + 5, { class: active ? "active-label" : "pin-label" });
   }
+  addText(root, `phase: ${demo.spiPhase}`, layout.mcuX + layout.mcuW + 12, y0 + lines.length * 20 + 14, { class: "clock-head" });
 }
 
 function drawHardwareHeatmap(root) {
@@ -328,6 +338,21 @@ function receiveMisoFrame(hardware) {
   const words = hardware.spi?.words || [];
   if (rowIndex < 0 || rowIndex >= 16 || words.length !== 16) return;
   demo.receivedCodes[rowIndex] = words.slice(0, 16);
+}
+
+function updateSpiPhase() {
+  const clock = demo.hardware?.clock;
+  const phases = clock?.phases || [];
+  const rowPeriod = clock?.rowPeriodMs || Math.max(1, 1000 / demo.refreshRate / 16);
+  const position = performance.now() % rowPeriod;
+  const active = phases.find((phase) => position >= phase.startMs && position < phase.endMs);
+  demo.spiPhase = active?.name || "read_fifo";
+}
+
+function activeSpiLines() {
+  if (demo.spiPhase === "command") return new Set(["CS", "MOSI", "SCK"]);
+  if (demo.spiPhase === "read_fifo") return new Set(["CS", "MISO", "SCK"]);
+  return new Set();
 }
 
 function clearReceivedHeatmap() {
@@ -415,6 +440,14 @@ function restartAutoScanTimer() {
   demo.timer = window.setInterval(stepRow, Math.max(1, 1000 / demo.refreshRate));
 }
 
+function startSpiPhaseAnimation() {
+  if (demo.phaseTimer) window.clearInterval(demo.phaseTimer);
+  demo.phaseTimer = window.setInterval(() => {
+    if (!demo.hardware) return;
+    drawCircuit();
+  }, 120);
+}
+
 objectSizeRange.addEventListener("input", syncFromControls);
 objectMassRange.addEventListener("input", syncFromControls);
 refreshRateRange.addEventListener("input", syncFromControls);
@@ -424,4 +457,5 @@ window.addEventListener("pointerup", endObjectPlacement);
 document.getElementById("singleStep").addEventListener("click", stepRow);
 document.getElementById("autoScan").addEventListener("click", toggleAutoScan);
 
+startSpiPhaseAnimation();
 updateDemo();
