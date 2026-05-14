@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-05-14 - Remove Live Waveform Display
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Appearance]** Removed the real-time waveform panel from the FSR demo.
+   - The demo no longer displays CLK/SCK, Address, MOSI, MISO, or CS waveforms.
+   - Removed the dedicated waveform CSS and rendering code to avoid misleading timing visuals.
+
+2. **[Docs]** Clarified the refresh-rate visualization ratio.
+   - The refresh-rate note now states that visual row stepping is illustrative.
+   - It shows the displayed full-frame rate versus the actual hardware full-frame rate as a 1:16 ratio.
+   - Right-side transfer-rate statistics are explicitly described as using the actual hardware setting.
+
 ## 2026-05-14 - Stable Clock Waveform Rendering
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

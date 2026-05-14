@@ -7,18 +7,12 @@ const demo = {
   refreshRate: 10,
   auto: false,
   timer: null,
-  waveRaf: null,
-  waveStartTime: 0,
-  waveNow: 0,
   hardware: null,
   placingObject: false,
   receivedCodes: Array.from({ length: 16 }, () => Array(16).fill(null)),
-  waveHistory: null,
 };
 
 const HEATMAP_DETECTION_OFFSET = 2;
-const WAVE_SAMPLE_COUNT = 176;
-const WAVE_LINES = ["CLK/SCK", "ADDRESS", "MOSI", "MISO", "CS"];
 
 const svgEl = document.getElementById("fsrCircuit");
 const objectSizeRange = document.getElementById("objectSizeRange");
@@ -27,6 +21,7 @@ const refreshRateRange = document.getElementById("refreshRateRange");
 const objectSizeValue = document.getElementById("objectSizeValue");
 const objectMassValue = document.getElementById("objectMassValue");
 const refreshRateValue = document.getElementById("refreshRateValue");
+const refreshRateNote = document.getElementById("refreshRateNote");
 const scanState = document.getElementById("scanState");
 const activeCell = document.getElementById("activeCell");
 const fsrResistance = document.getElementById("fsrResistance");
@@ -54,10 +49,6 @@ const layout = {
   heatmapX: 1062,
   heatmapY: 118,
   heatmapSize: 176,
-  waveX: 48,
-  waveY: 808,
-  waveW: 1184,
-  waveH: 62,
 };
 
 function svg(tag, attrs = {}) {
@@ -165,7 +156,6 @@ function drawCircuit() {
   drawArray(root, columns);
   drawAdc(root, columns);
   drawHardwareHeatmap(root);
-  drawSignalWaveforms(root);
 
   fsrResistance.textContent = formatOhms(active.fsrOhms);
   adcVoltage.textContent = `${active.nodeVoltage.toFixed(2)} V`;
@@ -174,6 +164,7 @@ function drawCircuit() {
   objectSizeValue.textContent = `${demo.objectSize} mm`;
   objectMassValue.textContent = `${demo.objectMass} g`;
   refreshRateValue.textContent = `${demo.refreshRate} Hz`;
+  refreshRateNote.textContent = refreshRateExplanation();
   scanState.textContent = demo.auto ? "auto scan" : "manual";
   svgEl.classList.toggle("no-animation", demo.refreshRate > 10);
   const rates = demo.hardware.mcu.lineRates;
@@ -330,168 +321,10 @@ function drawHardwareHeatmap(root) {
   addText(root, `scan row R${demo.row}, threshold ${heatmapDetectionCode()}`, x0, y0 + layout.heatmapSize + 22, { class: "clock-head" });
 }
 
-function drawSignalWaveforms(root) {
-  const x0 = layout.waveX;
-  const y0 = layout.waveY;
-  const w = layout.waveW;
-  const rowH = 11;
-  const clock = demo.hardware.clock;
-  if (!demo.waveHistory) resetWaveHistory();
-
-  root.appendChild(svg("rect", { x: x0 - 10, y: y0 - 24, width: w + 20, height: layout.waveH + 18, rx: 6, class: "wave-panel" }));
-  addText(root, `CLK/SCK ${formatClock(clock.spiClockHz)}`, x0, y0 - 8, { class: "clock-title" });
-  addText(root, demo.auto ? "live hardware transfer samples" : "idle until Auto Scan", x0 + w, y0 - 8, { class: "wave-value", "text-anchor": "end" });
-
-  const rows = [
-    {
-      label: "CLK/SCK",
-      className: "wave-line clk",
-    },
-    {
-      label: "ADDRESS",
-      className: "wave-line address",
-    },
-    {
-      label: "MOSI",
-      className: "wave-line mosi",
-    },
-    {
-      label: "MISO",
-      className: "wave-line miso",
-    },
-    {
-      label: "CS",
-      className: "wave-line cs",
-    },
-  ];
-
-  for (let i = 0; i < rows.length; i += 1) {
-    const row = rows[i];
-    const y = y0 + i * rowH + 7;
-    addText(root, row.label, x0, y + 4, { class: "wave-label" });
-    line(root, x0 + 68, y + 5, x0 + w, y + 5, "wave-baseline");
-    root.appendChild(svg("path", {
-      d: row.label === "CLK/SCK"
-        ? clockHistoryPath(x0 + 68, y, w - 68)
-        : waveHistoryPath(demo.waveHistory[row.label], x0 + 68, y, w - 68),
-      class: row.className,
-      fill: "none",
-    }));
-  }
-}
-
-function clockHistoryPath(x, y, width) {
-  if (!demo.auto || !demo.hardware) return waveHistoryPath(demo.waveHistory["CLK/SCK"], x, y, width);
-
-  const clock = demo.hardware.clock;
-  const rowMs = Math.max(0.001, clock.rowPeriodMs);
-  const phases = clock.phases || [];
-  const command = phases.find((phase) => phase.name === "command") || { startMs: 0, endMs: rowMs * 0.18 };
-  const read = phases.find((phase) => phase.name === "read_fifo") || { startMs: rowMs * 0.58, endMs: rowMs };
-  const elapsedNow = (demo.waveNow - demo.waveStartTime) % rowMs;
-  const cyclePx = Math.max(3, Math.min(32, 320000 / Math.max(1, clock.spiClockHz)));
-  const phasePx = ((demo.waveNow - demo.waveStartTime) / (1000 / Math.max(1, clock.spiClockHz))) * cyclePx;
-
-  return waveformFromLevelFunction(x, y, width, (px) => {
-    const ageMs = ((width - px) / width) * rowMs;
-    const t = positiveModulo(elapsedNow - ageMs, rowMs);
-    const commandActive = t >= command.startMs && t <= command.endMs;
-    const readActive = t >= read.startMs && t <= read.endMs;
-    if (!commandActive && !readActive) return 0;
-    return Math.floor((px + phasePx) / (cyclePx / 2)) % 2 === 0 ? 1 : 0;
-  });
-}
-
-function waveHistoryPath(values, x, y, width) {
-  return waveformFromLevelFunction(x, y, width, (px) => values[Math.round((px / width) * (values.length - 1))] ? 1 : 0);
-}
-
-function waveformFromLevelFunction(x, y, width, levelAt) {
-  const amp = 4;
-  const low = y + amp;
-  const high = y - amp;
-  let previous = levelAt(0);
-  let d = `M ${x} ${previous ? high : low}`;
-  for (let px = 1; px <= width; px += 1) {
-    const current = levelAt(px);
-    const prevY = previous ? high : low;
-    const nextY = current ? high : low;
-    const nextX = x + px;
-    d += ` L ${nextX} ${prevY}`;
-    if (nextY !== prevY) d += ` L ${nextX} ${nextY}`;
-    previous = current;
-  }
-  return d;
-}
-
-function positiveModulo(value, divisor) {
-  return ((value % divisor) + divisor) % divisor;
-}
-
-function resetWaveHistory() {
-  demo.waveHistory = {};
-  for (const name of WAVE_LINES) demo.waveHistory[name] = Array(WAVE_SAMPLE_COUNT).fill(0);
-}
-
-function appendWaveSample(levels) {
-  if (!demo.waveHistory) resetWaveHistory();
-  for (const name of WAVE_LINES) {
-    demo.waveHistory[name].push(levels[name] ? 1 : 0);
-    while (demo.waveHistory[name].length > WAVE_SAMPLE_COUNT) demo.waveHistory[name].shift();
-  }
-}
-
-function hardwareLineLevels(now) {
-  if (!demo.auto || !demo.hardware) return Object.fromEntries(WAVE_LINES.map((name) => [name, 0]));
-
-  const clock = demo.hardware.clock;
-  const rowMs = Math.max(0.001, clock.rowPeriodMs);
-  const elapsed = (now - demo.waveStartTime) % rowMs;
-  const phases = clock.phases || [];
-  const command = phases.find((phase) => phase.name === "command") || { startMs: 0, endMs: rowMs * 0.18 };
-  const read = phases.find((phase) => phase.name === "read_fifo") || { startMs: rowMs * 0.58, endMs: rowMs };
-  const addressEnd = Math.max(0.02, Math.min(command.endMs, rowMs * 0.1));
-  const commandActive = elapsed >= command.startMs && elapsed <= command.endMs;
-  const readActive = elapsed >= read.startMs && elapsed <= read.endMs;
-  const spiActive = commandActive || readActive;
-  const spiStart = commandActive ? command.startMs : read.startMs;
-  const halfClockMs = 500 / Math.max(1, clock.spiClockHz);
-  const clockLevel = spiActive ? Math.floor((elapsed - spiStart) / halfClockMs) % 2 === 0 : false;
-
-  return {
-    "CLK/SCK": clockLevel,
-    ADDRESS: elapsed <= addressEnd,
-    MOSI: commandActive,
-    MISO: readActive,
-    CS: spiActive,
-  };
-}
-
-function startWaveformTicker() {
-  if (demo.waveRaf) window.cancelAnimationFrame(demo.waveRaf);
-  demo.waveStartTime = performance.now();
-  resetWaveHistory();
-
-  const tick = (now) => {
-    demo.waveNow = now;
-    appendWaveSample(hardwareLineLevels(now));
-    drawCircuit();
-    if (demo.auto) demo.waveRaf = window.requestAnimationFrame(tick);
-  };
-  demo.waveRaf = window.requestAnimationFrame(tick);
-}
-
-function stopWaveformTicker() {
-  if (demo.waveRaf) window.cancelAnimationFrame(demo.waveRaf);
-  demo.waveRaf = null;
-  appendWaveSample(Object.fromEntries(WAVE_LINES.map((name) => [name, 0])));
-  drawCircuit();
-}
-
-function formatClock(value) {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)} MHz`;
-  if (value >= 1000) return `${(value / 1000).toFixed(1)} kHz`;
-  return `${Math.round(value)} Hz`;
+function refreshRateExplanation() {
+  const displayedFrameRate = demo.refreshRate / 16;
+  const actualFrameRate = demo.refreshRate;
+  return `Visual row stepping is illustrative: displayed full-frame rate ${displayedFrameRate.toFixed(2)} Hz vs actual hardware setting ${actualFrameRate} Hz, ratio 1:16. Right-side transfer rates use the actual hardware setting.`;
 }
 
 function drawPressureObject(root) {
@@ -594,7 +427,6 @@ function syncFromControls() {
   demo.objectMass = Number(objectMassRange.value);
   demo.refreshRate = Number(refreshRateRange.value);
   restartAutoScanTimer();
-  if (demo.auto) startWaveformTicker();
   updateDemo();
 }
 
@@ -606,8 +438,6 @@ function stepRow() {
 function toggleAutoScan() {
   demo.auto = !demo.auto;
   document.getElementById("autoScan").classList.toggle("active", demo.auto);
-  if (demo.auto) startWaveformTicker();
-  else stopWaveformTicker();
   restartAutoScanTimer();
   updateDemo();
 }
