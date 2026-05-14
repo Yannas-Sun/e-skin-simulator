@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .fsr_hardware import ADC, Clock, DMUX, FSRArray, SPIBus
+from .fsr_hardware import ADC, Clock, DMUX, FSRArray, MCUTransferCounter, SPIBus
 
 
 @dataclass
@@ -66,6 +66,12 @@ class FSRReadoutProgram:
             object_size=object_size,
             object_mass=object_mass,
         )
+        mcu_stats = self.mcu_statistics(
+            pressed_row=pressed_row,
+            pressed_col=pressed_col,
+            object_size=object_size,
+            object_mass=object_mass,
+        )
         return {
             "row": self.dmux.selected_row,
             "objectRow": pressed_row,
@@ -92,6 +98,7 @@ class FSRReadoutProgram:
                 "scan": adc_scan,
             },
             "spi": spi_frame,
+            "mcu": mcu_stats,
             "clock": self.clock.snapshot(),
             "clockTrace": clock_trace,
         }
@@ -128,6 +135,30 @@ class FSRReadoutProgram:
             )
         self.dmux.set_selected_row(saved_row)
         return trace
+
+    def mcu_statistics(self, pressed_row: int, pressed_col: int, object_size: float, object_mass: float) -> dict:
+        counter = MCUTransferCounter(adc_bits=self.adc.bits)
+        saved_row = self.dmux.selected_row
+        for row in range(1, self.dmux.outputs + 1):
+            self.dmux.set_selected_row(row)
+            nodes = self.array.read_row(
+                dmux=self.dmux,
+                pressed_row=pressed_row,
+                pressed_col=pressed_col,
+                object_size=object_size,
+                object_mass=object_mass,
+            )
+            command = self.adc.scan_command(start_channel=0, scan_mode=0b11, x_bit=0)
+            self.adc.start_scan([node["nodeVoltage"] for node in nodes], command=command)
+            words = [sample["code"] for sample in self.adc.read_fifo()]
+            counter.record_row(
+                row=row,
+                address_bits=self.dmux.address_bits,
+                command=command,
+                fifo_words=words,
+            )
+        self.dmux.set_selected_row(saved_row)
+        return counter.snapshot(self.clock.refresh_hz)
 
 
 def run_fsr_readout(row: int, col: int, force: float, object_row: int | None = None, object_size: float = 72.0, object_mass: float | None = None, refresh_rate: float = 10.0) -> dict:

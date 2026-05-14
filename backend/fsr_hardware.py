@@ -36,43 +36,6 @@ class Clock:
     def spi_clock_hz(self) -> float:
         return self.spi_bits_per_row / max(0.001, self.row_period_ms / 1000.0)
 
-    def line_rates(self) -> dict[str, dict[str, float | str]]:
-        rows_per_second = self.rows_per_frame * self.refresh_hz
-        address_bits_per_second = 4 * rows_per_second
-        mosi_bits_per_second = 8 * rows_per_second
-        miso_bits_per_second = self.adc_channels * self.adc_bits * rows_per_second
-        sck_pulses_per_second = self.spi_bits_per_row * rows_per_second
-        cs_assertions_per_second = 2 * rows_per_second
-        cs_edges_per_second = 4 * rows_per_second
-        return {
-            "Address": {
-                "valuePerSecond": address_bits_per_second,
-                "unit": "bit/s",
-                "detail": "4-bit A1-A4 row address x 16 rows x refresh rate",
-            },
-            "SCK": {
-                "valuePerSecond": sck_pulses_per_second,
-                "unit": "pulse/s",
-                "detail": "(8 MOSI command clocks + 16 x 12 MISO read clocks) x 16 rows x refresh rate",
-            },
-            "MOSI": {
-                "valuePerSecond": mosi_bits_per_second,
-                "unit": "bit/s",
-                "detail": "8-bit ADC scan command x 16 rows x refresh rate",
-            },
-            "MISO": {
-                "valuePerSecond": miso_bits_per_second,
-                "unit": "bit/s",
-                "detail": "16 channels x 12-bit ADC words x 16 rows x refresh rate",
-            },
-            "CS": {
-                "valuePerSecond": cs_assertions_per_second,
-                "unit": "assertion/s",
-                "edgePerSecond": cs_edges_per_second,
-                "detail": "two active-low CS windows per row: command and FIFO read",
-            },
-        }
-
     def snapshot(self) -> dict:
         row_ms = self.row_period_ms
         command_end = row_ms * 0.18
@@ -85,12 +48,69 @@ class Clock:
             "spiClockHz": self.spi_clock_hz,
             "framesPerSecond": self.refresh_hz,
             "rowsPerSecond": self.rows_per_frame * self.refresh_hz,
-            "lineRates": self.line_rates(),
             "phases": [
                 {"name": "command", "startMs": 0.0, "endMs": command_end, "activeLines": ["CS", "MOSI", "SCK"]},
                 {"name": "conversion", "startMs": command_end, "endMs": conversion_end, "activeLines": ["EOC"]},
                 {"name": "read_fifo", "startMs": conversion_end, "endMs": row_ms, "activeLines": ["CS", "MISO", "SCK"]},
             ],
+        }
+
+
+class MCUTransferCounter:
+    """Counts line activity produced by the MCU while it scans one full frame."""
+
+    def __init__(self, adc_bits: int = ADC_BITS) -> None:
+        self.adc_bits = adc_bits
+        self.counts = {
+            "Address": {"perFrame": 0, "unit": "bit", "detail": "MCU wrote A1-A4 row address bits"},
+            "SCK": {"perFrame": 0, "unit": "pulse", "detail": "MCU generated clocks for command and FIFO read"},
+            "MOSI": {"perFrame": 0, "unit": "bit", "detail": "MCU transmitted ADC scan commands"},
+            "MISO": {"perFrame": 0, "unit": "bit", "detail": "MCU received ADC FIFO words"},
+            "CS": {"perFrame": 0, "unit": "assertion", "edgesPerFrame": 0, "detail": "MCU asserted ADC chip select"},
+        }
+        self.events: list[dict[str, int | str]] = []
+
+    def record_row(self, row: int, address_bits: list[int], command: dict, fifo_words: list[int]) -> None:
+        mosi_bits = len(command["binary"])
+        miso_bits = len(fifo_words) * self.adc_bits
+        sck_pulses = mosi_bits + miso_bits
+        self.counts["Address"]["perFrame"] += len(address_bits)
+        self.counts["MOSI"]["perFrame"] += mosi_bits
+        self.counts["MISO"]["perFrame"] += miso_bits
+        self.counts["SCK"]["perFrame"] += sck_pulses
+        self.counts["CS"]["perFrame"] += 2
+        self.counts["CS"]["edgesPerFrame"] += 4
+        self.events.append(
+            {
+                "row": row,
+                "addressBits": len(address_bits),
+                "mosiBits": mosi_bits,
+                "misoBits": miso_bits,
+                "sckPulses": sck_pulses,
+                "csAssertions": 2,
+            }
+        )
+
+    def snapshot(self, refresh_hz: float) -> dict:
+        line_rates = {}
+        for name, data in self.counts.items():
+            per_frame = float(data["perFrame"])
+            line_rates[name] = {
+                "perFrame": per_frame,
+                "perSecond": per_frame * refresh_hz,
+                "unit": data["unit"],
+                "detail": data["detail"],
+            }
+            if name == "CS":
+                edges = float(data["edgesPerFrame"])
+                line_rates[name]["edgesPerFrame"] = edges
+                line_rates[name]["edgesPerSecond"] = edges * refresh_hz
+        return {
+            "source": "MCU event counter",
+            "framesPerSecond": refresh_hz,
+            "rowsCounted": len(self.events),
+            "lineRates": line_rates,
+            "events": self.events,
         }
 
 

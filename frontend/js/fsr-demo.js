@@ -112,12 +112,12 @@ function formatOhms(ohms) {
 }
 
 function formatRate(value, unit) {
-  if (unit === "pulse/s") {
+  if (unit === "pulse") {
     if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)} Mpulse/s`;
     if (value >= 1000) return `${(value / 1000).toFixed(1)} kpulse/s`;
     return `${value.toFixed(0)} pulse/s`;
   }
-  if (unit === "assertion/s") {
+  if (unit === "assertion") {
     if (value >= 1000) return `${(value / 1000).toFixed(1)} kassert/s`;
     return `${value.toFixed(0)} assert/s`;
   }
@@ -169,18 +169,21 @@ function drawCircuit() {
   refreshRateValue.textContent = `${demo.refreshRate} Hz`;
   scanState.textContent = demo.auto ? "auto scan" : "manual";
   svgEl.classList.toggle("no-animation", demo.refreshRate > 10);
-  const rates = demo.hardware.clock.lineRates;
+  const rates = demo.hardware.mcu.lineRates;
   spiFrame.textContent = [
-    `REFRESH = ${demo.hardware.clock.framesPerSecond.toFixed(0)} full 16x16 frame/s`,
-    `ROWS    = ${demo.hardware.clock.rowsPerSecond.toFixed(0)} row scan/s`,
+    `MCU transfer counter`,
+    `REFRESH = ${demo.hardware.mcu.framesPerSecond.toFixed(0)} full 16x16 frame/s`,
+    `COUNTED = ${demo.hardware.mcu.rowsCounted} row scans/frame`,
     ``,
-    `Address A1-A4 : ${formatRate(rates.Address.valuePerSecond, rates.Address.unit)}`,
-    `SCK           : ${formatRate(rates.SCK.valuePerSecond, rates.SCK.unit)}`,
-    `MOSI          : ${formatRate(rates.MOSI.valuePerSecond, rates.MOSI.unit)}  cmd=${demo.hardware.spi.command.binary}`,
-    `MISO          : ${formatRate(rates.MISO.valuePerSecond, rates.MISO.unit)}  16x12-bit/row`,
-    `CS            : ${formatRate(rates.CS.valuePerSecond, rates.CS.unit)}  edges=${rates.CS.edgePerSecond.toFixed(0)}/s`,
+    `Line          per frame        per second`,
+    `Address       ${rates.Address.perFrame.toFixed(0).padStart(5)} bit       ${formatRate(rates.Address.perSecond, rates.Address.unit)}`,
+    `SCK           ${rates.SCK.perFrame.toFixed(0).padStart(5)} pulse     ${formatRate(rates.SCK.perSecond, rates.SCK.unit)}`,
+    `MOSI          ${rates.MOSI.perFrame.toFixed(0).padStart(5)} bit       ${formatRate(rates.MOSI.perSecond, rates.MOSI.unit)}`,
+    `MISO          ${rates.MISO.perFrame.toFixed(0).padStart(5)} bit       ${formatRate(rates.MISO.perSecond, rates.MISO.unit)}`,
+    `CS            ${rates.CS.perFrame.toFixed(0).padStart(5)} assert    ${formatRate(rates.CS.perSecond, rates.CS.unit)}`,
+    `CS edges      ${rates.CS.edgesPerFrame.toFixed(0).padStart(5)} edge      ${rates.CS.edgesPerSecond.toFixed(0)} edge/s`,
     ``,
-    `Per row: 4 address bits, 8 MOSI bits, 192 MISO bits`,
+    `MOSI command: ${demo.hardware.spi.command.binary}`,
     `SPI phase: ${demo.spiPhase}`,
   ].join("\n");
 }

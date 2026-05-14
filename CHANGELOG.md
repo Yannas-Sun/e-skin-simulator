@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-05-14 - MCU-Measured Line Throughput
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Moved line-rate reporting from clock formulas to an MCU event counter.
+   - The sampler now counts Address, SCK, MOSI, MISO, and CS activity while simulating one full 16-row frame.
+   - Per-second values are derived from the counted per-frame events and the selected full-frame refresh rate.
+
+2. **[Appearance]** Updated the SPI Frame panel to show MCU-counted throughput.
+   - The panel now displays per-frame and per-second values for all five requested lines.
+   - The display explicitly labels the source as the MCU transfer counter.
+
 ## 2026-05-14 - Scan Line Throughput Display
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
