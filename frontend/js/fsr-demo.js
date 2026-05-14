@@ -48,6 +48,10 @@ const layout = {
   heatmapX: 1062,
   heatmapY: 118,
   heatmapSize: 176,
+  waveX: 1048,
+  waveY: 360,
+  waveW: 220,
+  waveH: 240,
 };
 
 function svg(tag, attrs = {}) {
@@ -156,6 +160,7 @@ function drawCircuit() {
   drawAdc(root, columns);
   drawInfoFlow(root);
   drawHardwareHeatmap(root);
+  drawSignalWaveforms(root);
 
   fsrResistance.textContent = formatOhms(active.fsrOhms);
   adcVoltage.textContent = `${active.nodeVoltage.toFixed(2)} V`;
@@ -318,6 +323,59 @@ function drawHardwareHeatmap(root) {
     }
   }
   addText(root, `scan row R${demo.row}, threshold ${heatmapDetectionCode()}`, x0, y0 + layout.heatmapSize + 22, { class: "clock-head" });
+}
+
+function drawSignalWaveforms(root) {
+  const x0 = layout.waveX;
+  const y0 = layout.waveY;
+  const w = layout.waveW;
+  const rowH = 30;
+  root.appendChild(svg("rect", { x: x0 - 10, y: y0 - 30, width: w + 20, height: layout.waveH, rx: 6, class: "wave-panel" }));
+  addText(root, `CLK ${formatClock(demo.hardware.clock.spiClockHz)}`, x0, y0 - 11, { class: "clock-title" });
+
+  const addressBits = demo.hardware.address.value.toString(2).padStart(4, "0");
+  const mosiBits = demo.hardware.spi.command.binary;
+  const misoWord = demo.hardware.spi.words[demo.col - 1] ?? 0;
+  const misoBits = Number(misoWord).toString(2).padStart(12, "0");
+  const rows = [
+    { label: "CLK", bits: alternatingBits(24), className: "wave-line clk" },
+    { label: "ADDR", bits: addressBits.split("").map(Number), className: "wave-line address", value: addressBits },
+    { label: "SCK", bits: alternatingBits(24), className: "wave-line sck" },
+    { label: "MOSI", bits: mosiBits.split("").map(Number), className: "wave-line mosi", value: mosiBits },
+    { label: "MISO", bits: misoBits.split("").map(Number), className: "wave-line miso", value: `C${demo.col}=${misoWord}` },
+    { label: "CS", bits: [1, 0, 0, 1, 1, 0, 0, 1], className: "wave-line cs", value: "active-low" },
+  ];
+
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
+    const y = y0 + i * rowH + 8;
+    addText(root, row.label, x0, y + 4, { class: "wave-label" });
+    root.appendChild(svg("path", { d: digitalWavePath(row.bits, x0 + 45, y, w - 58, 9), class: row.className, fill: "none" }));
+    if (row.value) addText(root, row.value, x0 + w - 4, y + 4, { class: "wave-value", "text-anchor": "end" });
+  }
+}
+
+function alternatingBits(count) {
+  return Array.from({ length: count }, (_, index) => index % 2);
+}
+
+function digitalWavePath(bits, x, y, width, amp) {
+  if (!bits.length) return "";
+  const step = width / bits.length;
+  const levelY = (bit) => y + (bit ? -amp : amp);
+  let d = `M ${x} ${levelY(bits[0])}`;
+  for (let i = 0; i < bits.length; i += 1) {
+    const xNext = x + (i + 1) * step;
+    d += ` L ${xNext} ${levelY(bits[i])}`;
+    if (i < bits.length - 1 && bits[i + 1] !== bits[i]) d += ` L ${xNext} ${levelY(bits[i + 1])}`;
+  }
+  return d;
+}
+
+function formatClock(value) {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)} MHz`;
+  if (value >= 1000) return `${(value / 1000).toFixed(1)} kHz`;
+  return `${Math.round(value)} Hz`;
 }
 
 function drawPressureObject(root) {

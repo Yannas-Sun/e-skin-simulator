@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-05-14 - Scan Waveform Visualization
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Appearance]** Added a waveform panel for the scan lines.
+   - The FSR demo now visualizes CLK, Address, SCK, MOSI, MISO, and CS waveforms.
+   - The top waveform displays the current configured CLK/SCK value.
+
+2. **[Docs]** Clarified the refresh-rate control in the UI.
+   - The controls now state that visualization speed is illustrative.
+   - The right-side throughput counter remains based on the actual configured full-frame refresh rate.
+
 ## 2026-05-14 - State-Driven SPI Line Highlighting
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

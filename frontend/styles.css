@@ -659,6 +659,13 @@ h2 {
   font-weight: 800;
 }
 
+.control-note {
+  margin: -4px 0 12px;
+  color: var(--muted);
+  font-size: 0.73rem;
+  line-height: 1.35;
+}
+
 .circuit-panel {
   min-height: 880px;
   overflow: auto;
@@ -830,6 +837,51 @@ h2 {
   fill: #fbfdfc;
   stroke: #c9d7d2;
   stroke-width: 1.4;
+}
+
+.wave-panel {
+  fill: #fbfdfc;
+  stroke: #c9d7d2;
+  stroke-width: 1.4;
+}
+
+.wave-line {
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.wave-line.clk,
+.wave-line.sck {
+  stroke: #1e8aa5;
+}
+
+.wave-line.address {
+  stroke: #7b8985;
+}
+
+.wave-line.mosi {
+  stroke: #2f7b63;
+}
+
+.wave-line.miso {
+  stroke: #d69d28;
+}
+
+.wave-line.cs {
+  stroke: #d75745;
+}
+
+.wave-label {
+  fill: #53605c;
+  font-family: Consolas, "Liberation Mono", monospace;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.wave-value {
+  fill: #53605c;
+  font-family: Consolas, "Liberation Mono", monospace;
+  font-size: 8px;
 }
 
 .heatmap-cell {
