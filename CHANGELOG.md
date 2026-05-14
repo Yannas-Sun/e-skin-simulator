@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-05-14 - Scan Line Throughput Display
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Calculated scan-line transfer rates from full-frame refresh rate.
+   - Refresh rate is treated as completed `16 x 16` scan frames per second.
+   - Address, SCK, MOSI, MISO, and CS rates are calculated from 16 row scans per frame.
+
+2. **[Appearance]** Replaced the SPI frame text with per-line throughput values.
+   - The panel now reports Address, SCK, MOSI, MISO, and CS activity per second.
+   - The display keeps the current MOSI command and active SPI phase as context.
+
 ## 2026-05-14 - Visible SPI Phase and Heatmap Scaling
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

@@ -111,6 +111,21 @@ function formatOhms(ohms) {
   return `${Math.round(ohms)} Ohm`;
 }
 
+function formatRate(value, unit) {
+  if (unit === "pulse/s") {
+    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)} Mpulse/s`;
+    if (value >= 1000) return `${(value / 1000).toFixed(1)} kpulse/s`;
+    return `${value.toFixed(0)} pulse/s`;
+  }
+  if (unit === "assertion/s") {
+    if (value >= 1000) return `${(value / 1000).toFixed(1)} kassert/s`;
+    return `${value.toFixed(0)} assert/s`;
+  }
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)} Mb/s`;
+  if (value >= 1000) return `${(value / 1000).toFixed(1)} kb/s`;
+  return `${value.toFixed(0)} b/s`;
+}
+
 async function requestHardwareState() {
   const response = await fetch("/api/fsr-readout", {
     method: "POST",
@@ -154,19 +169,19 @@ function drawCircuit() {
   refreshRateValue.textContent = `${demo.refreshRate} Hz`;
   scanState.textContent = demo.auto ? "auto scan" : "manual";
   svgEl.classList.toggle("no-animation", demo.refreshRate > 10);
+  const rates = demo.hardware.clock.lineRates;
   spiFrame.textContent = [
-    `ROW_SELECT = ${demo.hardware.address.value.toString(2).padStart(4, "0")}  // A1-A4`,
-    `OBJECT = R${demo.objectRow},C${demo.col}  SIZE = ${demo.objectSize} mm  MASS = ${demo.objectMass} g`,
-    `MOSI FORMAT: ${demo.hardware.spi.command.format}`,
-    `CS: LOW  MOSI: ${demo.hardware.spi.command.binary} (${demo.hardware.spi.command.hex})  CS: HIGH`,
-    `BITS: ${Object.entries(demo.hardware.spi.command.bits).map(([name, bit]) => `${name}=${bit}`).join(" ")}`,
-    `ADC: AIN0 -> AIN15 sample/SAR/FIFO`,
-    `EOC = ${demo.hardware.adc.eoc}  (${demo.hardware.adc.eocState})`,
-    `CS: LOW  SCK clocks FIFO  CS: HIGH`,
-    `CLK: refresh ${demo.hardware.clock.refreshHz.toFixed(0)} Hz, SCK ${Math.round(demo.hardware.clock.spiClockHz)} Hz`,
-    `SPI PHASE: ${demo.spiPhase}`,
-    `ADC_CH[${demo.col.toString().padStart(2, "0")}] = ${active.code.toString().padStart(4, " ")}`,
-    ...demo.hardware.spi.lines.map((line) => `${line.name}: ${line.carries}`),
+    `REFRESH = ${demo.hardware.clock.framesPerSecond.toFixed(0)} full 16x16 frame/s`,
+    `ROWS    = ${demo.hardware.clock.rowsPerSecond.toFixed(0)} row scan/s`,
+    ``,
+    `Address A1-A4 : ${formatRate(rates.Address.valuePerSecond, rates.Address.unit)}`,
+    `SCK           : ${formatRate(rates.SCK.valuePerSecond, rates.SCK.unit)}`,
+    `MOSI          : ${formatRate(rates.MOSI.valuePerSecond, rates.MOSI.unit)}  cmd=${demo.hardware.spi.command.binary}`,
+    `MISO          : ${formatRate(rates.MISO.valuePerSecond, rates.MISO.unit)}  16x12-bit/row`,
+    `CS            : ${formatRate(rates.CS.valuePerSecond, rates.CS.unit)}  edges=${rates.CS.edgePerSecond.toFixed(0)}/s`,
+    ``,
+    `Per row: 4 address bits, 8 MOSI bits, 192 MISO bits`,
+    `SPI phase: ${demo.spiPhase}`,
   ].join("\n");
 }
 

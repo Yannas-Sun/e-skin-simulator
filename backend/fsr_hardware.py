@@ -36,6 +36,43 @@ class Clock:
     def spi_clock_hz(self) -> float:
         return self.spi_bits_per_row / max(0.001, self.row_period_ms / 1000.0)
 
+    def line_rates(self) -> dict[str, dict[str, float | str]]:
+        rows_per_second = self.rows_per_frame * self.refresh_hz
+        address_bits_per_second = 4 * rows_per_second
+        mosi_bits_per_second = 8 * rows_per_second
+        miso_bits_per_second = self.adc_channels * self.adc_bits * rows_per_second
+        sck_pulses_per_second = self.spi_bits_per_row * rows_per_second
+        cs_assertions_per_second = 2 * rows_per_second
+        cs_edges_per_second = 4 * rows_per_second
+        return {
+            "Address": {
+                "valuePerSecond": address_bits_per_second,
+                "unit": "bit/s",
+                "detail": "4-bit A1-A4 row address x 16 rows x refresh rate",
+            },
+            "SCK": {
+                "valuePerSecond": sck_pulses_per_second,
+                "unit": "pulse/s",
+                "detail": "(8 MOSI command clocks + 16 x 12 MISO read clocks) x 16 rows x refresh rate",
+            },
+            "MOSI": {
+                "valuePerSecond": mosi_bits_per_second,
+                "unit": "bit/s",
+                "detail": "8-bit ADC scan command x 16 rows x refresh rate",
+            },
+            "MISO": {
+                "valuePerSecond": miso_bits_per_second,
+                "unit": "bit/s",
+                "detail": "16 channels x 12-bit ADC words x 16 rows x refresh rate",
+            },
+            "CS": {
+                "valuePerSecond": cs_assertions_per_second,
+                "unit": "assertion/s",
+                "edgePerSecond": cs_edges_per_second,
+                "detail": "two active-low CS windows per row: command and FIFO read",
+            },
+        }
+
     def snapshot(self) -> dict:
         row_ms = self.row_period_ms
         command_end = row_ms * 0.18
@@ -46,6 +83,9 @@ class Clock:
             "rowPeriodMs": row_ms,
             "spiBitsPerRow": self.spi_bits_per_row,
             "spiClockHz": self.spi_clock_hz,
+            "framesPerSecond": self.refresh_hz,
+            "rowsPerSecond": self.rows_per_frame * self.refresh_hz,
+            "lineRates": self.line_rates(),
             "phases": [
                 {"name": "command", "startMs": 0.0, "endMs": command_end, "activeLines": ["CS", "MOSI", "SCK"]},
                 {"name": "conversion", "startMs": command_end, "endMs": conversion_end, "activeLines": ["EOC"]},
