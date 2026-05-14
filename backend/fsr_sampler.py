@@ -52,6 +52,8 @@ class FSRReadoutProgram:
                     "active": node["active"],
                 }
             )
+        idle_voltage = self.array.divider_voltage(self.array.vcc, self.array.fsr.resistance(0.0))
+        idle_code = self.adc.encode(idle_voltage)
 
         # Transfer phase: after EOC is low, MCU clocks FIFO words out on MISO.
         spi_frame = self.spi.frame(
@@ -91,7 +93,8 @@ class FSRReadoutProgram:
                 "channels": self.adc.channels,
                 "bits": self.adc.bits,
                 "vref": self.adc.vref,
-                "idleCode": self.adc.encode(0.0),
+                "idleCode": idle_code,
+                "idleVoltage": idle_voltage,
                 "fifoDepth": len(self.adc.fifo),
                 "eoc": self.adc.eoc,
                 "eocState": "LOW_CONVERSION_COMPLETE" if self.adc.eoc == 0 else "HIGH_BUSY",

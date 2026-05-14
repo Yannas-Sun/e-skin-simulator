@@ -242,15 +242,14 @@ function drawArray(root, columns) {
       const x = colX(col);
       const y = rowY(row);
       const code = receivedCode(row, col);
-      const covered = code !== null && code >= heatmapDetectionCode();
-      const detected = row === demo.row && covered;
+      const scannedActive = row === demo.row && code !== null && code >= heatmapDetectionCode();
       root.appendChild(svg("rect", {
         x: x - 10,
         y: y - 8,
         width: 20,
         height: 16,
         rx: 3,
-        class: detected ? "fsr-cell detected" : covered ? "fsr-cell covered" : "fsr-cell",
+        class: scannedActive ? "fsr-cell covered" : "fsr-cell",
       }));
     }
   }

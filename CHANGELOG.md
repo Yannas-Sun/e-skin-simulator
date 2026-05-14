@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-05-14 - Restore Scanned-Only FSR Highlighting
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Fixed the ADC idle baseline used by the FSR display.
+   - Idle code now represents the unpressed FSR voltage-divider output, not `0 V`.
+   - This prevents unpressed cells from crossing the detection threshold.
+
+2. **[Appearance]** Restored scanned-only red highlighting in the FSR array.
+   - The large FSR grid now turns cells red only on the currently scanned row.
+   - Previously scanned rows no longer remain red in the circuit array view.
+
 ## 2026-05-14 - MCU-Measured Line Throughput
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
