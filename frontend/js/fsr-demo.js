@@ -7,12 +7,17 @@ const demo = {
   refreshRate: 10,
   auto: false,
   timer: null,
+  waveRaf: null,
+  waveStartTime: 0,
   hardware: null,
   placingObject: false,
   receivedCodes: Array.from({ length: 16 }, () => Array(16).fill(null)),
+  waveHistory: null,
 };
 
 const HEATMAP_DETECTION_OFFSET = 2;
+const WAVE_SAMPLE_COUNT = 176;
+const WAVE_LINES = ["CLK/SCK", "ADDRESS", "MOSI", "MISO", "CS"];
 
 const svgEl = document.getElementById("fsrCircuit");
 const objectSizeRange = document.getElementById("objectSizeRange");
@@ -330,113 +335,121 @@ function drawSignalWaveforms(root) {
   const w = layout.waveW;
   const rowH = 11;
   const clock = demo.hardware.clock;
-  const phases = clock.phases || [];
-  const command = phases.find((phase) => phase.name === "command") || { startMs: 0, endMs: clock.rowPeriodMs * 0.18 };
-  const read = phases.find((phase) => phase.name === "read_fifo") || { startMs: clock.rowPeriodMs * 0.58, endMs: clock.rowPeriodMs };
-  const addressEnd = Math.max(0.02, Math.min(command.endMs, clock.rowPeriodMs * 0.1));
-  const patternW = Math.max(300, Math.min(760, clock.rowPeriodMs * 86));
-  const pulsePx = Math.max(1.3, Math.min(8, 18 - Math.log10(Math.max(1, clock.spiClockHz)) * 3));
-  const duration = Math.max(0.35, Math.min(3.8, clock.rowPeriodMs / 1000));
+  if (!demo.waveHistory) resetWaveHistory();
 
   root.appendChild(svg("rect", { x: x0 - 10, y: y0 - 24, width: w + 20, height: layout.waveH + 18, rx: 6, class: "wave-panel" }));
   addText(root, `CLK/SCK ${formatClock(clock.spiClockHz)}`, x0, y0 - 8, { class: "clock-title" });
-  addText(root, "high = data transfer window", x0 + w, y0 - 8, { class: "wave-value", "text-anchor": "end" });
+  addText(root, demo.auto ? "live hardware transfer samples" : "idle until Auto Scan", x0 + w, y0 - 8, { class: "wave-value", "text-anchor": "end" });
 
   const rows = [
     {
       label: "CLK/SCK",
       className: "wave-line clk",
-      pathFor: (offset, y) => clockWavePath([command, read], x0 + 68 + offset, y, patternW, clock.rowPeriodMs, pulsePx),
     },
     {
       label: "ADDRESS",
       className: "wave-line address",
-      pathFor: (offset, y) => transferWindowPath([{ startMs: 0, endMs: addressEnd }], x0 + 68 + offset, y, patternW, clock.rowPeriodMs),
     },
     {
       label: "MOSI",
       className: "wave-line mosi",
-      pathFor: (offset, y) => transferWindowPath([command], x0 + 68 + offset, y, patternW, clock.rowPeriodMs),
     },
     {
       label: "MISO",
       className: "wave-line miso",
-      pathFor: (offset, y) => transferWindowPath([read], x0 + 68 + offset, y, patternW, clock.rowPeriodMs),
     },
     {
       label: "CS",
       className: "wave-line cs",
-      pathFor: (offset, y) => transferWindowPath([command, read], x0 + 68 + offset, y, patternW, clock.rowPeriodMs),
     },
   ];
-
-  const clipId = `waveClip-${Date.now()}`;
-  const defs = svg("defs");
-  const clip = svg("clipPath", { id: clipId });
-  clip.appendChild(svg("rect", { x: x0 + 66, y: y0 - 1, width: w - 70, height: layout.waveH }));
-  defs.appendChild(clip);
-  root.appendChild(defs);
-
-  const scrollGroup = svg("g", { "clip-path": `url(#${clipId})` });
-  const animate = svg("animateTransform", {
-    attributeName: "transform",
-    type: "translate",
-    from: "0 0",
-    to: `${-patternW} 0`,
-    dur: `${duration}s`,
-    repeatCount: "indefinite",
-  });
-  scrollGroup.appendChild(animate);
-  root.appendChild(scrollGroup);
 
   for (let i = 0; i < rows.length; i += 1) {
     const row = rows[i];
     const y = y0 + i * rowH + 7;
     addText(root, row.label, x0, y + 4, { class: "wave-label" });
     line(root, x0 + 68, y + 5, x0 + w, y + 5, "wave-baseline");
-    let d = "";
-    for (let repeat = -1; repeat <= 4; repeat += 1) d += row.pathFor(repeat * patternW, y);
-    scrollGroup.appendChild(svg("path", { d, class: row.className, fill: "none" }));
+    root.appendChild(svg("path", {
+      d: waveHistoryPath(demo.waveHistory[row.label], x0 + 68, y, w - 68),
+      class: row.className,
+      fill: "none",
+    }));
   }
 }
 
-function transferWindowPath(windows, x, y, width, rowMs) {
+function waveHistoryPath(values, x, y, width) {
   const amp = 4;
   const low = y + amp;
   const high = y - amp;
-  const scale = width / Math.max(0.001, rowMs);
-  let cursor = x;
-  let d = `M ${x} ${low}`;
-  for (const window of windows) {
-    const start = x + window.startMs * scale;
-    const end = x + window.endMs * scale;
-    d += ` L ${start} ${low} L ${start} ${high} L ${end} ${high} L ${end} ${low}`;
-    cursor = end;
+  const step = width / Math.max(1, values.length - 1);
+  let d = `M ${x} ${values[0] ? high : low}`;
+  for (let index = 1; index < values.length; index += 1) {
+    const prevY = values[index - 1] ? high : low;
+    const nextY = values[index] ? high : low;
+    const nextX = x + index * step;
+    d += ` L ${nextX} ${prevY}`;
+    if (nextY !== prevY) d += ` L ${nextX} ${nextY}`;
   }
-  return `${d} L ${x + width} ${low}`;
+  return d;
 }
 
-function clockWavePath(windows, x, y, width, rowMs, pulsePx) {
-  const amp = 4;
-  const low = y + amp;
-  const high = y - amp;
-  const scale = width / Math.max(0.001, rowMs);
-  let d = `M ${x} ${low}`;
-  for (const window of windows) {
-    const start = x + window.startMs * scale;
-    const end = x + window.endMs * scale;
-    d += ` L ${start} ${low}`;
-    let currentX = start;
-    let highState = true;
-    while (currentX < end) {
-      const nextX = Math.min(end, currentX + pulsePx);
-      d += ` L ${currentX} ${highState ? high : low} L ${nextX} ${highState ? high : low}`;
-      currentX = nextX;
-      highState = !highState;
-    }
-    d += ` L ${end} ${low}`;
+function resetWaveHistory() {
+  demo.waveHistory = {};
+  for (const name of WAVE_LINES) demo.waveHistory[name] = Array(WAVE_SAMPLE_COUNT).fill(0);
+}
+
+function appendWaveSample(levels) {
+  if (!demo.waveHistory) resetWaveHistory();
+  for (const name of WAVE_LINES) {
+    demo.waveHistory[name].push(levels[name] ? 1 : 0);
+    while (demo.waveHistory[name].length > WAVE_SAMPLE_COUNT) demo.waveHistory[name].shift();
   }
-  return `${d} L ${x + width} ${low}`;
+}
+
+function hardwareLineLevels(now) {
+  if (!demo.auto || !demo.hardware) return Object.fromEntries(WAVE_LINES.map((name) => [name, 0]));
+
+  const clock = demo.hardware.clock;
+  const rowMs = Math.max(0.001, clock.rowPeriodMs);
+  const elapsed = (now - demo.waveStartTime) % rowMs;
+  const phases = clock.phases || [];
+  const command = phases.find((phase) => phase.name === "command") || { startMs: 0, endMs: rowMs * 0.18 };
+  const read = phases.find((phase) => phase.name === "read_fifo") || { startMs: rowMs * 0.58, endMs: rowMs };
+  const addressEnd = Math.max(0.02, Math.min(command.endMs, rowMs * 0.1));
+  const commandActive = elapsed >= command.startMs && elapsed <= command.endMs;
+  const readActive = elapsed >= read.startMs && elapsed <= read.endMs;
+  const spiActive = commandActive || readActive;
+  const spiStart = commandActive ? command.startMs : read.startMs;
+  const halfClockMs = 500 / Math.max(1, clock.spiClockHz);
+  const clockLevel = spiActive ? Math.floor((elapsed - spiStart) / halfClockMs) % 2 === 0 : false;
+
+  return {
+    "CLK/SCK": clockLevel,
+    ADDRESS: elapsed <= addressEnd,
+    MOSI: commandActive,
+    MISO: readActive,
+    CS: spiActive,
+  };
+}
+
+function startWaveformTicker() {
+  if (demo.waveRaf) window.cancelAnimationFrame(demo.waveRaf);
+  demo.waveStartTime = performance.now();
+  resetWaveHistory();
+
+  const tick = (now) => {
+    appendWaveSample(hardwareLineLevels(now));
+    drawCircuit();
+    if (demo.auto) demo.waveRaf = window.requestAnimationFrame(tick);
+  };
+  demo.waveRaf = window.requestAnimationFrame(tick);
+}
+
+function stopWaveformTicker() {
+  if (demo.waveRaf) window.cancelAnimationFrame(demo.waveRaf);
+  demo.waveRaf = null;
+  appendWaveSample(Object.fromEntries(WAVE_LINES.map((name) => [name, 0])));
+  drawCircuit();
 }
 
 function formatClock(value) {
@@ -545,6 +558,7 @@ function syncFromControls() {
   demo.objectMass = Number(objectMassRange.value);
   demo.refreshRate = Number(refreshRateRange.value);
   restartAutoScanTimer();
+  if (demo.auto) startWaveformTicker();
   updateDemo();
 }
 
@@ -556,6 +570,8 @@ function stepRow() {
 function toggleAutoScan() {
   demo.auto = !demo.auto;
   document.getElementById("autoScan").classList.toggle("active", demo.auto);
+  if (demo.auto) startWaveformTicker();
+  else stopWaveformTicker();
   restartAutoScanTimer();
   updateDemo();
 }

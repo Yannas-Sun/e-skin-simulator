@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-05-14 - Hardware-Driven Live Waveforms
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Replaced decorative waveform animation with live hardware-state sampling.
+   - Auto Scan now samples the virtual hardware timing phases on each browser frame.
+   - CLK/SCK toggles only during command and FIFO read phases, using the configured SPI clock.
+   - ADDRESS, MOSI, MISO, and CS go high only when their corresponding hardware transfer window is active.
+
+2. **[Appearance]** Converted the bottom waveform panel into a scrolling history display.
+   - The visible waveforms now change only from sampled hardware line states.
+   - When Auto Scan is off, the waveform panel stops updating and reports idle state.
+
 ## 2026-05-14 - Rolling Transfer Waveforms
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
