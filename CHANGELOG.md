@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-05-14 - Softer FSR Heatmap Gradient
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Smoothed the simulated pressure field under the square object.
+   - FSR force now uses a softer radial falloff inside the object footprint.
+   - The center-to-edge pressure difference is reduced for a more natural heatmap.
+
+2. **[Appearance]** Restored persistent scanned-cell coloring in the large FSR array.
+   - Cells turn red after they have been scanned through MISO and exceed the threshold.
+   - Unscanned cells remain neutral, so the object no longer appears fully detected before scanning.
+
+3. **[Appearance]** Reduced heatmap contrast.
+   - Heatmap intensity uses a wider ADC-code dynamic range so neighboring force levels differ less abruptly.
+
 ## 2026-05-14 - Restore Scanned-Only FSR Highlighting
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

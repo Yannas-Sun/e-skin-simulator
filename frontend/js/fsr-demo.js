@@ -242,7 +242,7 @@ function drawArray(root, columns) {
       const x = colX(col);
       const y = rowY(row);
       const code = receivedCode(row, col);
-      const scannedActive = row === demo.row && code !== null && code >= heatmapDetectionCode();
+      const scannedActive = code !== null && code >= heatmapDetectionCode();
       root.appendChild(svg("rect", {
         x: x - 10,
         y: y - 8,
@@ -358,7 +358,7 @@ function heatmapIntensity(code) {
   if (code === null) return 0;
   const idle = demo.hardware?.adc?.idleCode ?? 212;
   const signal = Math.max(0, code - idle);
-  return Math.max(0, Math.min(1, signal / 1200));
+  return Math.max(0, Math.min(1, signal / 1800));
 }
 
 function receiveMisoFrame(hardware) {

@@ -327,8 +327,10 @@ class FSRArray:
         dy = abs(row - pressed_row) * 23.0
         if dx > half_side or dy > half_side:
             return 0.0
-        edge_falloff = max(dx, dy) / max(1.0, half_side)
-        return peak_force * (1.0 - 0.28 * edge_falloff)
+        nx = dx / max(1.0, half_side)
+        ny = dy / max(1.0, half_side)
+        radial = min(1.0, (nx * nx + ny * ny) ** 0.5 / 1.414)
+        return peak_force * (0.78 + 0.22 * (1.0 - radial))
 
     def divider_voltage(self, row_voltage: float, fsr_ohms: float) -> float:
         if row_voltage <= 0:
