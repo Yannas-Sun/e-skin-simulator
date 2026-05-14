@@ -48,10 +48,10 @@ const layout = {
   heatmapX: 1062,
   heatmapY: 118,
   heatmapSize: 176,
-  waveX: 1048,
-  waveY: 360,
-  waveW: 220,
-  waveH: 240,
+  waveX: 48,
+  waveY: 808,
+  waveW: 1184,
+  waveH: 62,
 };
 
 function svg(tag, attrs = {}) {
@@ -158,7 +158,6 @@ function drawCircuit() {
   drawDmux(root);
   drawArray(root, columns);
   drawAdc(root, columns);
-  drawInfoFlow(root);
   drawHardwareHeatmap(root);
   drawSignalWaveforms(root);
 
@@ -329,47 +328,115 @@ function drawSignalWaveforms(root) {
   const x0 = layout.waveX;
   const y0 = layout.waveY;
   const w = layout.waveW;
-  const rowH = 30;
-  root.appendChild(svg("rect", { x: x0 - 10, y: y0 - 30, width: w + 20, height: layout.waveH, rx: 6, class: "wave-panel" }));
-  addText(root, `CLK ${formatClock(demo.hardware.clock.spiClockHz)}`, x0, y0 - 11, { class: "clock-title" });
+  const rowH = 11;
+  const clock = demo.hardware.clock;
+  const phases = clock.phases || [];
+  const command = phases.find((phase) => phase.name === "command") || { startMs: 0, endMs: clock.rowPeriodMs * 0.18 };
+  const read = phases.find((phase) => phase.name === "read_fifo") || { startMs: clock.rowPeriodMs * 0.58, endMs: clock.rowPeriodMs };
+  const addressEnd = Math.max(0.02, Math.min(command.endMs, clock.rowPeriodMs * 0.1));
+  const patternW = Math.max(300, Math.min(760, clock.rowPeriodMs * 86));
+  const pulsePx = Math.max(1.3, Math.min(8, 18 - Math.log10(Math.max(1, clock.spiClockHz)) * 3));
+  const duration = Math.max(0.35, Math.min(3.8, clock.rowPeriodMs / 1000));
 
-  const addressBits = demo.hardware.address.value.toString(2).padStart(4, "0");
-  const mosiBits = demo.hardware.spi.command.binary;
-  const misoWord = demo.hardware.spi.words[demo.col - 1] ?? 0;
-  const misoBits = Number(misoWord).toString(2).padStart(12, "0");
+  root.appendChild(svg("rect", { x: x0 - 10, y: y0 - 24, width: w + 20, height: layout.waveH + 18, rx: 6, class: "wave-panel" }));
+  addText(root, `CLK/SCK ${formatClock(clock.spiClockHz)}`, x0, y0 - 8, { class: "clock-title" });
+  addText(root, "high = data transfer window", x0 + w, y0 - 8, { class: "wave-value", "text-anchor": "end" });
+
   const rows = [
-    { label: "CLK", bits: alternatingBits(24), className: "wave-line clk" },
-    { label: "ADDR", bits: addressBits.split("").map(Number), className: "wave-line address", value: addressBits },
-    { label: "SCK", bits: alternatingBits(24), className: "wave-line sck" },
-    { label: "MOSI", bits: mosiBits.split("").map(Number), className: "wave-line mosi", value: mosiBits },
-    { label: "MISO", bits: misoBits.split("").map(Number), className: "wave-line miso", value: `C${demo.col}=${misoWord}` },
-    { label: "CS", bits: [1, 0, 0, 1, 1, 0, 0, 1], className: "wave-line cs", value: "active-low" },
+    {
+      label: "CLK/SCK",
+      className: "wave-line clk",
+      pathFor: (offset, y) => clockWavePath([command, read], x0 + 68 + offset, y, patternW, clock.rowPeriodMs, pulsePx),
+    },
+    {
+      label: "ADDRESS",
+      className: "wave-line address",
+      pathFor: (offset, y) => transferWindowPath([{ startMs: 0, endMs: addressEnd }], x0 + 68 + offset, y, patternW, clock.rowPeriodMs),
+    },
+    {
+      label: "MOSI",
+      className: "wave-line mosi",
+      pathFor: (offset, y) => transferWindowPath([command], x0 + 68 + offset, y, patternW, clock.rowPeriodMs),
+    },
+    {
+      label: "MISO",
+      className: "wave-line miso",
+      pathFor: (offset, y) => transferWindowPath([read], x0 + 68 + offset, y, patternW, clock.rowPeriodMs),
+    },
+    {
+      label: "CS",
+      className: "wave-line cs",
+      pathFor: (offset, y) => transferWindowPath([command, read], x0 + 68 + offset, y, patternW, clock.rowPeriodMs),
+    },
   ];
+
+  const clipId = `waveClip-${Date.now()}`;
+  const defs = svg("defs");
+  const clip = svg("clipPath", { id: clipId });
+  clip.appendChild(svg("rect", { x: x0 + 66, y: y0 - 1, width: w - 70, height: layout.waveH }));
+  defs.appendChild(clip);
+  root.appendChild(defs);
+
+  const scrollGroup = svg("g", { "clip-path": `url(#${clipId})` });
+  const animate = svg("animateTransform", {
+    attributeName: "transform",
+    type: "translate",
+    from: "0 0",
+    to: `${-patternW} 0`,
+    dur: `${duration}s`,
+    repeatCount: "indefinite",
+  });
+  scrollGroup.appendChild(animate);
+  root.appendChild(scrollGroup);
 
   for (let i = 0; i < rows.length; i += 1) {
     const row = rows[i];
-    const y = y0 + i * rowH + 8;
+    const y = y0 + i * rowH + 7;
     addText(root, row.label, x0, y + 4, { class: "wave-label" });
-    root.appendChild(svg("path", { d: digitalWavePath(row.bits, x0 + 45, y, w - 58, 9), class: row.className, fill: "none" }));
-    if (row.value) addText(root, row.value, x0 + w - 4, y + 4, { class: "wave-value", "text-anchor": "end" });
+    line(root, x0 + 68, y + 5, x0 + w, y + 5, "wave-baseline");
+    let d = "";
+    for (let repeat = -1; repeat <= 4; repeat += 1) d += row.pathFor(repeat * patternW, y);
+    scrollGroup.appendChild(svg("path", { d, class: row.className, fill: "none" }));
   }
 }
 
-function alternatingBits(count) {
-  return Array.from({ length: count }, (_, index) => index % 2);
+function transferWindowPath(windows, x, y, width, rowMs) {
+  const amp = 4;
+  const low = y + amp;
+  const high = y - amp;
+  const scale = width / Math.max(0.001, rowMs);
+  let cursor = x;
+  let d = `M ${x} ${low}`;
+  for (const window of windows) {
+    const start = x + window.startMs * scale;
+    const end = x + window.endMs * scale;
+    d += ` L ${start} ${low} L ${start} ${high} L ${end} ${high} L ${end} ${low}`;
+    cursor = end;
+  }
+  return `${d} L ${x + width} ${low}`;
 }
 
-function digitalWavePath(bits, x, y, width, amp) {
-  if (!bits.length) return "";
-  const step = width / bits.length;
-  const levelY = (bit) => y + (bit ? -amp : amp);
-  let d = `M ${x} ${levelY(bits[0])}`;
-  for (let i = 0; i < bits.length; i += 1) {
-    const xNext = x + (i + 1) * step;
-    d += ` L ${xNext} ${levelY(bits[i])}`;
-    if (i < bits.length - 1 && bits[i + 1] !== bits[i]) d += ` L ${xNext} ${levelY(bits[i + 1])}`;
+function clockWavePath(windows, x, y, width, rowMs, pulsePx) {
+  const amp = 4;
+  const low = y + amp;
+  const high = y - amp;
+  const scale = width / Math.max(0.001, rowMs);
+  let d = `M ${x} ${low}`;
+  for (const window of windows) {
+    const start = x + window.startMs * scale;
+    const end = x + window.endMs * scale;
+    d += ` L ${start} ${low}`;
+    let currentX = start;
+    let highState = true;
+    while (currentX < end) {
+      const nextX = Math.min(end, currentX + pulsePx);
+      d += ` L ${currentX} ${highState ? high : low} L ${nextX} ${highState ? high : low}`;
+      currentX = nextX;
+      highState = !highState;
+    }
+    d += ` L ${end} ${low}`;
   }
-  return d;
+  return `${d} L ${x + width} ${low}`;
 }
 
 function formatClock(value) {
@@ -386,13 +453,6 @@ function drawPressureObject(root) {
   g.appendChild(svg("rect", { x: -side / 2, y: -side / 2, width: side, height: side, class: "pressure-square" }));
   g.appendChild(svg("rect", { x: -7, y: -7, width: 14, height: 14, class: "pressure-core" }));
   root.appendChild(g);
-}
-
-function drawInfoFlow(root) {
-  addStep(root, "1", "MCU sets row address", 72, 820);
-  addStep(root, "2", "DMUX drives selected row", 335, 820);
-  addStep(root, "3", "Column divider voltages change", 620, 820);
-  addStep(root, "4", "ADC scans FIFO, then MISO streams", 945, 820);
 }
 
 function rowY(row) {
@@ -473,14 +533,6 @@ function updateObjectPlacement(event) {
 
 function endObjectPlacement() {
   demo.placingObject = false;
-}
-
-function addStep(root, num, text, x, y) {
-  const g = svg("g", { class: "step-badge" });
-  g.appendChild(svg("circle", { cx: x, cy: y - 5, r: 14 }));
-  addText(g, num, x, y, { "text-anchor": "middle" });
-  addText(g, text, x + 24, y, {});
-  root.appendChild(g);
 }
 
 async function updateDemo() {

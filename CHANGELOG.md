@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-05-14 - Rolling Transfer Waveforms
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Appearance]** Replaced the bottom four-step readout strip with a rolling waveform panel.
+   - The FSR demo now shows Address, CLK/SCK, MOSI, MISO, and CS in the former process-label area.
+   - CLK and SCK are merged into one waveform, with denser and narrower pulses as configured clock frequency increases.
+
+2. **[Logic]** Changed waveform levels to represent transfer windows.
+   - MOSI is high only during ADC command transmission.
+   - MISO is high only during ADC FIFO readout.
+   - CS and Address show high only during their active transfer/setup windows.
+
 ## 2026-05-14 - Scan Waveform Visualization
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

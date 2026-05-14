@@ -846,12 +846,13 @@ h2 {
 }
 
 .wave-line {
-  stroke-width: 2;
+  stroke-width: 1.8;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
   vector-effect: non-scaling-stroke;
 }
 
-.wave-line.clk,
-.wave-line.sck {
+.wave-line.clk {
   stroke: #1e8aa5;
 }
 
@@ -874,7 +875,7 @@ h2 {
 .wave-label {
   fill: #53605c;
   font-family: Consolas, "Liberation Mono", monospace;
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 800;
 }
 
@@ -882,6 +883,12 @@ h2 {
   fill: #53605c;
   font-family: Consolas, "Liberation Mono", monospace;
   font-size: 8px;
+}
+
+.wave-baseline {
+  stroke: rgba(83, 96, 92, 0.22);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
 }
 
 .heatmap-cell {
