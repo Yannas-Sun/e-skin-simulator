@@ -9,6 +9,7 @@ const demo = {
   timer: null,
   waveRaf: null,
   waveStartTime: 0,
+  waveNow: 0,
   hardware: null,
   placingObject: false,
   receivedCodes: Array.from({ length: 16 }, () => Array(16).fill(null)),
@@ -370,27 +371,61 @@ function drawSignalWaveforms(root) {
     addText(root, row.label, x0, y + 4, { class: "wave-label" });
     line(root, x0 + 68, y + 5, x0 + w, y + 5, "wave-baseline");
     root.appendChild(svg("path", {
-      d: waveHistoryPath(demo.waveHistory[row.label], x0 + 68, y, w - 68),
+      d: row.label === "CLK/SCK"
+        ? clockHistoryPath(x0 + 68, y, w - 68)
+        : waveHistoryPath(demo.waveHistory[row.label], x0 + 68, y, w - 68),
       class: row.className,
       fill: "none",
     }));
   }
 }
 
+function clockHistoryPath(x, y, width) {
+  if (!demo.auto || !demo.hardware) return waveHistoryPath(demo.waveHistory["CLK/SCK"], x, y, width);
+
+  const clock = demo.hardware.clock;
+  const rowMs = Math.max(0.001, clock.rowPeriodMs);
+  const phases = clock.phases || [];
+  const command = phases.find((phase) => phase.name === "command") || { startMs: 0, endMs: rowMs * 0.18 };
+  const read = phases.find((phase) => phase.name === "read_fifo") || { startMs: rowMs * 0.58, endMs: rowMs };
+  const elapsedNow = (demo.waveNow - demo.waveStartTime) % rowMs;
+  const cyclePx = Math.max(3, Math.min(32, 320000 / Math.max(1, clock.spiClockHz)));
+  const phasePx = ((demo.waveNow - demo.waveStartTime) / (1000 / Math.max(1, clock.spiClockHz))) * cyclePx;
+
+  return waveformFromLevelFunction(x, y, width, (px) => {
+    const ageMs = ((width - px) / width) * rowMs;
+    const t = positiveModulo(elapsedNow - ageMs, rowMs);
+    const commandActive = t >= command.startMs && t <= command.endMs;
+    const readActive = t >= read.startMs && t <= read.endMs;
+    if (!commandActive && !readActive) return 0;
+    return Math.floor((px + phasePx) / (cyclePx / 2)) % 2 === 0 ? 1 : 0;
+  });
+}
+
 function waveHistoryPath(values, x, y, width) {
+  return waveformFromLevelFunction(x, y, width, (px) => values[Math.round((px / width) * (values.length - 1))] ? 1 : 0);
+}
+
+function waveformFromLevelFunction(x, y, width, levelAt) {
   const amp = 4;
   const low = y + amp;
   const high = y - amp;
-  const step = width / Math.max(1, values.length - 1);
-  let d = `M ${x} ${values[0] ? high : low}`;
-  for (let index = 1; index < values.length; index += 1) {
-    const prevY = values[index - 1] ? high : low;
-    const nextY = values[index] ? high : low;
-    const nextX = x + index * step;
+  let previous = levelAt(0);
+  let d = `M ${x} ${previous ? high : low}`;
+  for (let px = 1; px <= width; px += 1) {
+    const current = levelAt(px);
+    const prevY = previous ? high : low;
+    const nextY = current ? high : low;
+    const nextX = x + px;
     d += ` L ${nextX} ${prevY}`;
     if (nextY !== prevY) d += ` L ${nextX} ${nextY}`;
+    previous = current;
   }
   return d;
+}
+
+function positiveModulo(value, divisor) {
+  return ((value % divisor) + divisor) % divisor;
 }
 
 function resetWaveHistory() {
@@ -438,6 +473,7 @@ function startWaveformTicker() {
   resetWaveHistory();
 
   const tick = (now) => {
+    demo.waveNow = now;
     appendWaveSample(hardwareLineLevels(now));
     drawCircuit();
     if (demo.auto) demo.waveRaf = window.requestAnimationFrame(tick);

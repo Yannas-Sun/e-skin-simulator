@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-05-14 - Stable Clock Waveform Rendering
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Fixed CLK/SCK aliasing in the waveform display.
+   - The clock waveform is now rendered analytically from the hardware time axis instead of browser-frame sampling.
+   - The visual clock period is stable while still changing width according to the configured SPI clock frequency.
+
+2. **[Appearance]** Kept CLK/SCK low outside actual SPI transfer windows.
+   - Clock pulses are only drawn during ADC command and FIFO-read phases.
+   - Non-clock signals continue to show live sampled transfer-window history.
+
 ## 2026-05-14 - Hardware-Driven Live Waveforms
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
