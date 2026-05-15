@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-05-15 - FIFO Playback Scheduling Fix
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Fixed FIFO animation being reset to the first column at high refresh rates.
+   - Auto Scan now waits for the current C1-C16 FIFO playback to finish before advancing to the next row.
+   - Refresh-rate data statistics still use the configured hardware refresh rate; only the illustrative UI playback is throttled.
+
+2. **[Interaction]** Reduced redundant updates while placing the pressure object.
+   - Dragging over the same FSR grid cell no longer restarts the FIFO playback.
+   - Hardware-state requests now avoid overlapping updates that could reset the scan cursor.
+
 ## 2026-05-15 - FIFO Column Scan Animation
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

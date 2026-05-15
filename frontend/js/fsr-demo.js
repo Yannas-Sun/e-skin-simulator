@@ -9,6 +9,8 @@ const demo = {
   timer: null,
   fifoTimer: null,
   fifoPlayback: null,
+  updateInFlight: false,
+  pendingUpdate: false,
   hardware: null,
   mosiResult: null,
   placingObject: false,
@@ -492,7 +494,7 @@ function startFifoPlayback(hardware) {
     words: words.slice(0, 16),
   };
   applyFifoWord();
-  const interval = Math.max(18, Math.min(120, (1000 / Math.max(1, demo.refreshRate)) / 16));
+  const interval = fifoPlaybackInterval();
   demo.fifoTimer = window.setInterval(() => {
     if (!demo.fifoPlayback?.active) return;
     demo.fifoPlayback.col += 1;
@@ -501,10 +503,15 @@ function startFifoPlayback(hardware) {
       demo.fifoTimer = null;
       demo.fifoPlayback.active = false;
       drawCircuit();
+      scheduleNextAutoRow();
       return;
     }
     applyFifoWord();
   }, interval);
+}
+
+function fifoPlaybackInterval() {
+  return Math.max(22, Math.min(120, (1000 / Math.max(1, demo.refreshRate)) / 16));
 }
 
 function applyFifoWord() {
@@ -548,6 +555,7 @@ function pointInArray(point) {
 function placeObjectFromPoint(point) {
   const col = clamp(Math.round((point.x - (layout.arrayX + 42)) / 40) + 1, 1, 16);
   const row = clamp(Math.round((point.y - (layout.arrayY + 28)) / 23) + 1, 1, 16);
+  if (row === demo.objectRow && col === demo.col) return;
   demo.objectRow = row;
   demo.col = col;
   updateDemo();
@@ -571,16 +579,26 @@ function endObjectPlacement() {
 }
 
 async function updateDemo() {
+  if (demo.updateInFlight) {
+    demo.pendingUpdate = true;
+    return;
+  }
+  demo.updateInFlight = true;
   await requestHardwareState();
   drawCircuit();
+  demo.updateInFlight = false;
+  if (demo.pendingUpdate) {
+    demo.pendingUpdate = false;
+    updateDemo();
+  }
 }
 
 function syncFromControls() {
   demo.objectSize = Number(objectSizeRange.value);
   demo.objectMass = Number(objectMassRange.value);
   demo.refreshRate = Number(refreshRateRange.value);
-  restartAutoScanTimer();
   updateDemo();
+  restartAutoScanTimer();
 }
 
 async function runManualMosi() {
@@ -607,15 +625,26 @@ function stepRow() {
 function toggleAutoScan() {
   demo.auto = !demo.auto;
   document.getElementById("autoScan").classList.toggle("active", demo.auto);
-  restartAutoScanTimer();
   updateDemo();
+  restartAutoScanTimer();
 }
 
 function restartAutoScanTimer() {
-  if (demo.timer) window.clearInterval(demo.timer);
+  if (demo.timer) window.clearTimeout(demo.timer);
   demo.timer = null;
-  if (!demo.auto) return;
-  demo.timer = window.setInterval(stepRow, Math.max(1, 1000 / demo.refreshRate));
+  if (!demo.auto) {
+    return;
+  }
+  scheduleNextAutoRow();
+}
+
+function scheduleNextAutoRow() {
+  if (demo.timer) window.clearTimeout(demo.timer);
+  demo.timer = null;
+  if (!demo.auto || demo.fifoPlayback?.active || demo.updateInFlight) {
+    return;
+  }
+  demo.timer = window.setTimeout(stepRow, fifoPlaybackInterval());
 }
 
 objectSizeRange.addEventListener("input", syncFromControls);
