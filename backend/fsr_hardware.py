@@ -28,8 +28,8 @@ MAX11632_INPUT_DATA_BYTE_TABLE = [
     },
     {
         "register": "Reset",
-        "bits": ["0", "0", "0", "1", "RESET_N", "X", "X", "X"],
-        "description": "Controls the active-low reset bit.",
+        "bits": ["0", "0", "0", "1", "RESET", "X", "X", "X"],
+        "description": "Controls FIFO clear or full register reset.",
     },
 ]
 
@@ -363,7 +363,7 @@ class ADC:
             register = "reset"
             table_row = "Reset"
             fields = {
-                "RESET_N": (byte >> 3) & 1,
+                "RESET": (byte >> 3) & 1,
                 "X2": (byte >> 2) & 1,
                 "X1": (byte >> 1) & 1,
                 "X0": byte & 1,
@@ -418,20 +418,20 @@ class ADC:
             "label": "averaging disabled" if not avg_on else "averaging enabled",
         }
 
-    def reset_command(self, reset_n: int = 1) -> dict:
-        reset_bit = 1 if reset_n else 0
-        value = 0b00010000 | (reset_bit << 3)
+    def reset_command(self, reset_bit: int = 1) -> dict:
+        reset_value = 1 if reset_bit else 0
+        value = 0b00010000 | (reset_value << 3)
         decoded = self.describe_input_byte(value)
         return {
             "register": "reset",
             "value": value,
             "binary": format(value, "08b"),
             "hex": f"0x{value:02X}",
-            "format": "0 0 0 1 RESET_N X X X",
+            "format": "0 0 0 1 RESET X X X",
             "tableRow": decoded["tableRow"],
             "fields": decoded["fields"],
-            "resetN": reset_bit,
-            "label": "normal operation, reset not asserted" if reset_bit else "active-low reset asserted",
+            "reset": reset_value,
+            "label": "clear FIFO" if reset_value else "reset all registers to power-up defaults",
         }
 
     def scan_command(self, start_channel: int = 15, scan_mode: int = 0b00, x_bit: int = 0) -> dict:
@@ -472,13 +472,19 @@ class ADC:
             return f"scan AIN{channel} repeatedly"
         return f"single conversion AIN{channel}"
 
-    def sar_convert(self, channel: int, voltage: float) -> dict[str, int | float | str]:
+    def sar_convert(self, channel: int, voltage: float) -> dict[str, int | float | str | list[int]]:
+        code = self.encode(voltage)
+        word = code & ADC_MAX_CODE
         return {
             "channel": channel,
             "ain": f"AIN{channel - 1}",
             "voltage": voltage,
-            "code": self.encode(voltage),
+            "code": code,
+            "doutWord": word,
+            "doutBinary": format(word, "016b"),
+            "doutBytes": [(word >> 8) & 0xFF, word & 0xFF],
             "outputWordBits": MAX11632_OUTPUT_WORD_BITS,
+            "outputFormat": "MSB first, 0000 + 12-bit binary code",
             "stage": "sample -> SAR convert -> FIFO",
         }
 

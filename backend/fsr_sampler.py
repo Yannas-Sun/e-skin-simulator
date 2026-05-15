@@ -45,7 +45,7 @@ class FSRReadoutProgram:
         # ADC phase: MCU commands MAX11632 to scan AIN0-AIN15 into its FIFO.
         setup_command = self.adc.setup_command(clock_mode=0b10, reference_mode=0b10)
         averaging_command = self.adc.averaging_command(avg_on=False, navg=0, nscan=0)
-        reset_command = self.adc.reset_command(reset_n=1)
+        reset_command = self.adc.reset_command(reset_bit=1)
         scan_command = self.adc.scan_command(start_channel=15, scan_mode=0b00, x_bit=0)
         adc_scan = self.adc.start_scan([node["nodeVoltage"] for node in column_nodes], command=scan_command)
         adc_samples = self.adc.read_fifo()
@@ -60,6 +60,9 @@ class FSRReadoutProgram:
                     "loadOhms": node["loadOhms"],
                     "nodeVoltage": node["nodeVoltage"],
                     "code": sample["code"],
+                    "doutWord": sample["doutWord"],
+                    "doutBinary": sample["doutBinary"],
+                    "doutBytes": sample["doutBytes"],
                     "active": node["active"],
                 }
             )
@@ -70,7 +73,7 @@ class FSRReadoutProgram:
         spi_frame = self.spi.frame(
             row=self.dmux.selected_row,
             command=scan_command,
-            words=[column["code"] for column in columns],
+            words=[column["doutWord"] for column in columns],
             clock=self.clock,
         )
         clock_trace = self.clock_trace(
@@ -137,7 +140,9 @@ class FSRReadoutProgram:
             scan_command = self.adc.scan_command(start_channel=15, scan_mode=0b00, x_bit=0)
             self.adc.start_scan([node["nodeVoltage"] for node in nodes], command=scan_command)
             words = [sample["code"] for sample in self.adc.read_fifo()]
-            active_word = words[pressed_col - 1]
+            fifo_words = [sample["doutWord"] for sample in self.adc.read_fifo()]
+            active_code = words[pressed_col - 1]
+            active_word = fifo_words[pressed_col - 1]
             trace.append(
                 {
                     "clk": row,
@@ -147,7 +152,7 @@ class FSRReadoutProgram:
                     "mosi": scan_command["binary"],
                     "miso": format(active_word, "016b"),
                     "mosiLabel": f"{scan_command['hex']} scan AIN0-AIN15",
-                    "misoLabel": f"C{pressed_col} word 0000 + code {active_word}",
+                    "misoLabel": f"C{pressed_col} word 0000 + code {active_code}",
                     "eoc": 0,
                     "spiOut": f"MISO[{pressed_col}]={active_word}",
                 }
@@ -170,11 +175,12 @@ class FSRReadoutProgram:
             command = self.adc.scan_command(start_channel=15, scan_mode=0b00, x_bit=0)
             self.adc.start_scan([node["nodeVoltage"] for node in nodes], command=command)
             words = [sample["code"] for sample in self.adc.read_fifo()]
+            fifo_words = [sample["doutWord"] for sample in self.adc.read_fifo()]
             counter.record_row(
                 row=row,
                 address_bits=self.dmux.address_bits,
                 command=command,
-                fifo_words=words,
+                fifo_words=fifo_words,
             )
         self.dmux.set_selected_row(saved_row)
         return counter.snapshot(self.clock.refresh_hz)

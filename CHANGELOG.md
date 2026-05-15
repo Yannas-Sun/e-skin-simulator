@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-05-15 - ADC DOUT Format and Wider Readout Panel
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Made the simulated ADC FIFO output explicit as MAX11632 DOUT words.
+   - Each conversion now exposes the 16-bit DOUT word, binary DOUT text, and two output bytes.
+   - The 16-bit word keeps the datasheet format: four leading zeros followed by the 12-bit ADC code, MSB first.
+   - Reset-register metadata now matches the datasheet wording: `RESET=1` clears FIFO and `RESET=0` resets registers.
+
+2. **[Appearance]** Doubled the FSR demo right-side data panel width.
+   - The demo grid now gives the readout panel 620 px instead of 310 px.
+   - This gives the SPI transfer details and MAX11632 command table more room.
+
 ## 2026-05-15 - MAX11632 Input Byte Table
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

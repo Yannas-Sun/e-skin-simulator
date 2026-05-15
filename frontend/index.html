@@ -73,7 +73,7 @@
             <dd>MAX11632 setup byte: <code>0 1 CKSEL1 CKSEL0 REFSEL1 REFSEL0 X X</code>.</dd>
             <dd>MAX11632 conversion byte: <code>1 CHSEL3 CHSEL2 CHSEL1 CHSEL0 SCAN1 SCAN0 X</code>.</dd>
             <dd>MAX11632 averaging byte: <code>0 0 1 AVGON NAVG1 NAVG0 NSCAN1 NSCAN0</code>.</dd>
-            <dd>MAX11632 reset byte: <code>0 0 0 1 RESET_N X X X</code>.</dd>
+            <dd>MAX11632 reset byte: <code>0 0 0 1 RESET X X X</code>; <code>RESET=1</code> clears FIFO, <code>RESET=0</code> resets registers.</dd>
             <dd>Single-channel command template: <code>0x80 | (channel &lt;&lt; 3) | (scan &lt;&lt; 1)</code>.</dd>
             <dt>AIN0-AIN15 scan</dt>
             <dd><code>0xF8 = 1 1111 00 0</code>, scan channels 0 through 15.</dd>

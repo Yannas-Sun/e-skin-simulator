@@ -187,7 +187,7 @@ function drawCircuit() {
     ``,
     `MAX11632 setup: ${demo.hardware.adc.setupCommand.hex} ${demo.hardware.adc.setupCommand.binary}`,
     `MAX11632 averaging: ${demo.hardware.adc.averagingCommand.hex} ${demo.hardware.adc.averagingCommand.binary}`,
-    `MAX11632 reset state: ${demo.hardware.adc.resetCommand.hex} ${demo.hardware.adc.resetCommand.binary}`,
+    `MAX11632 reset byte ref: ${demo.hardware.adc.resetCommand.hex} ${demo.hardware.adc.resetCommand.binary}`,
     `MAX11632 conversion: ${demo.hardware.spi.command.hex} ${demo.hardware.spi.command.binary}`,
     `FIFO output: 16 x 16-bit words, each 0000 + 12-bit ADC code`,
     ``,
