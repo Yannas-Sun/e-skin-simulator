@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-05-15 - Hide MUX Scan in Direct Mode
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Removed visible MUX row stepping above 10 Hz.
+   - High-frequency direct mode now scans all 16 rows through the backend API and writes the full heatmap from ADC/FIFO results.
+   - The front end no longer advances the displayed row or highlights the DMUX-selected row above 10 Hz.
+
+2. **[Appearance]** Hid direct-mode scan highlights.
+   - Address lines, DMUX row outputs, array row highlight, and heatmap active-cell outline are suppressed in direct mode.
+   - The heatmap status label now reports direct full-frame scan instead of a moving row.
+
 ## 2026-05-15 - Correct Full-Frame Refresh Semantics
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

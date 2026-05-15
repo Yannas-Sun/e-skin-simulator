@@ -109,6 +109,7 @@ function drawDiode(parent, x, y, className = "diode") {
 }
 
 function addressBit(row, bit) {
+  if (!isMuxScanVisible()) return 0;
   const bits = demo.hardware?.address?.bits;
   if (bits && bits[bit]) return bits[bit].level;
   return ((row - 1) >> bit) & 1;
@@ -134,12 +135,12 @@ function formatRate(value, unit) {
   return `${value.toFixed(0)} b/s`;
 }
 
-async function requestHardwareState() {
+async function fetchHardwareRow(row) {
   const response = await fetch("/api/fsr-readout", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      row: demo.row,
+      row,
       objectRow: demo.objectRow,
       col: demo.col,
       objectSize: demo.objectSize,
@@ -147,7 +148,26 @@ async function requestHardwareState() {
       refreshRate: demo.refreshRate,
     }),
   });
-  demo.hardware = await response.json();
+  return response.json();
+}
+
+async function requestHardwareState() {
+  if (scanVisualizationMode() === "direct") {
+    const rows = await Promise.all(Array.from({ length: 16 }, (_, index) => fetchHardwareRow(index + 1)));
+    for (const rowState of rows) applyScannedRow(rowState);
+    demo.hardware = rows[Math.max(0, Math.min(15, demo.row - 1))] || rows[0];
+    stopFifoPlayback();
+    demo.fifoPlayback = {
+      active: false,
+      row: null,
+      col: null,
+      words: [],
+      mode: "direct",
+    };
+    drawCircuit();
+    return;
+  }
+  demo.hardware = await fetchHardwareRow(demo.row);
   showScanResult(demo.hardware);
 }
 
@@ -313,14 +333,15 @@ function drawAddressBus(root) {
 }
 
 function drawDmux(root) {
+  const showMux = isMuxScanVisible();
   root.appendChild(svg("rect", { x: layout.dmuxX, y: layout.dmuxY, width: layout.dmuxW, height: layout.dmuxH, rx: 7, class: "block dmux" }));
   addText(root, "DMUX", layout.dmuxX + layout.dmuxW / 2, layout.dmuxY - 22, { class: "block-title", "text-anchor": "middle" });
   for (const rowState of demo.hardware.dmuxRows) {
     const row = rowState.row;
     const y = rowY(row);
-    const active = rowState.selected;
+    const active = showMux && rowState.selected;
     const diodeX = layout.dmuxX + layout.dmuxW + 28;
-    addText(root, `R${row}`, layout.dmuxX + 28, y + 5, { class: row === demo.row ? "row-label active-label" : "row-label" });
+    addText(root, `R${row}`, layout.dmuxX + 28, y + 5, { class: active ? "row-label active-label" : "row-label" });
     addText(root, rowState.state, layout.dmuxX + 78, y + 5, { class: active ? "active-label dmux-state" : "pin-label dmux-state" });
     line(root, layout.dmuxX + layout.dmuxW, y, diodeX - 11, y, active ? "wire active-wire" : "wire ground-wire");
     drawDiode(root, diodeX, y, active ? "diode active-diode" : "diode");
@@ -330,13 +351,14 @@ function drawDmux(root) {
 
 function drawArray(root, columns) {
   const fifoCol = fifoCursorCol();
+  const showMux = isMuxScanVisible();
   root.appendChild(svg("rect", { x: layout.arrayX, y: layout.arrayY, width: layout.arrayW, height: layout.arrayH, class: "array-bg" }));
   root.appendChild(svg("rect", { x: layout.arrayX, y: layout.arrayY, width: layout.arrayW, height: layout.arrayH, class: "array-hit-target" }));
   addText(root, "FSR array: 16 rows x 16 columns", layout.arrayX + layout.arrayW / 2, layout.arrayY - 20, { class: "block-title", "text-anchor": "middle" });
 
   for (let row = 1; row <= 16; row += 1) {
     const y = rowY(row);
-    line(root, layout.arrayX, y, layout.arrayX + layout.arrayW, y, row === demo.row ? "array-row active-wire" : "array-row");
+    line(root, layout.arrayX, y, layout.arrayX + layout.arrayW, y, showMux && row === demo.row ? "array-row active-wire" : "array-row");
   }
   for (let col = 1; col <= 16; col += 1) {
     const x = colX(col);
@@ -351,7 +373,7 @@ function drawArray(root, columns) {
       const y = rowY(row);
       const code = receivedCode(row, col);
       const scannedActive = code !== null && code >= heatmapDetectionCode();
-      const fifoActive = row === demo.row && col === fifoCol;
+      const fifoActive = showMux && row === demo.row && col === fifoCol;
       root.appendChild(svg("rect", {
         x: x - 10,
         y: y - 8,
@@ -416,6 +438,7 @@ function drawSpiBus(root) {
 
 function drawHardwareHeatmap(root) {
   const fifoCol = fifoCursorCol();
+  const showMux = isMuxScanVisible();
   const x0 = layout.heatmapX;
   const y0 = layout.heatmapY;
   const cell = layout.heatmapSize / 16;
@@ -432,12 +455,12 @@ function drawHardwareHeatmap(root) {
         y: y0 + (row - 1) * cell,
         width: cell - 1,
         height: cell - 1,
-        class: row === demo.row && col === fifoCol ? "heatmap-cell active-scan" : "heatmap-cell",
+        class: showMux && row === demo.row && col === fifoCol ? "heatmap-cell active-scan" : "heatmap-cell",
         fill: `hsl(${hue}, 78%, ${lightness}%)`,
       }));
     }
   }
-  addText(root, `scan row R${demo.row}, threshold ${heatmapDetectionCode()}`, x0, y0 + layout.heatmapSize + 22, { class: "clock-head" });
+  addText(root, showMux ? `scan row R${demo.row}, threshold ${heatmapDetectionCode()}` : `direct full-frame scan, threshold ${heatmapDetectionCode()}`, x0, y0 + layout.heatmapSize + 22, { class: "clock-head" });
 }
 
 function refreshRateExplanation() {
@@ -505,6 +528,10 @@ function scanVisualizationMode() {
   if (demo.refreshRate > 10) return "direct";
   if (demo.refreshRate > 1) return "row";
   return "fifo";
+}
+
+function isMuxScanVisible() {
+  return scanVisualizationMode() !== "direct" || demo.fifoPlayback?.mode === "fifo";
 }
 
 function applyScannedRow(hardware) {
@@ -710,7 +737,7 @@ function scheduleNextAutoRow() {
   if (!demo.auto || demo.fifoPlayback?.active || demo.updateInFlight) {
     return;
   }
-  demo.timer = window.setTimeout(stepRow, autoScanDelay());
+  demo.timer = window.setTimeout(scanVisualizationMode() === "direct" ? updateDemo : stepRow, autoScanDelay());
 }
 
 function autoScanDelay() {
