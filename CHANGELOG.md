@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-05-15 - Correct Full-Frame Refresh Semantics
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Recalibrated refresh-rate visualization around full 16x16 frame scans.
+   - `1 Hz` now means the hardware completes one full 16x16 scan per second.
+   - The UI demonstration runs at the intended 1/16 speed: at 1 Hz, one visible full scan takes 16 seconds, one row takes 1 second, and one FIFO column step takes 1/16 second.
+   - Only 1 Hz shows both row and FIFO column animation; 1-10 Hz shows row animation only; above 10 Hz writes scanned heatmap data without scan animation.
+
+2. **[Appearance]** Adjusted side-panel and protocol-table sizing.
+   - The left control panel width was increased by 1.5x.
+   - The MAX11632 input-byte table gives the Register column more room.
+
 ## 2026-05-15 - Frequency-Aware Scan Visualization
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

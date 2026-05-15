@@ -441,13 +441,13 @@ function drawHardwareHeatmap(root) {
 }
 
 function refreshRateExplanation() {
-  if (demo.refreshRate > 100) {
-    return `>100 Hz: animation is disabled and the heatmap is written directly from scanned ADC/FIFO data. Transfer rates still use ${demo.refreshRate} full 16x16 frame/s.`;
+  if (demo.refreshRate > 10) {
+    return `>10 Hz: scan animation is disabled. The heatmap is written directly from scanned ADC/FIFO data at ${demo.refreshRate} full 16x16 frame/s.`;
   }
-  if (demo.refreshRate > 5) {
-    return `>5 Hz: vertical FIFO playback is hidden; only row scanning is visualized. Heatmap values still come from scanned MISO/FIFO data.`;
+  if (demo.refreshRate > 1) {
+    return `1-10 Hz: only row scanning is visualized. Display runs at 1/16 hardware speed, so one visible row step takes ${(1 / demo.refreshRate).toFixed(3)} s.`;
   }
-  return `<=5 Hz: FIFO readout is visualized column by column. Manual MOSI playback is also shown at 5 Hz.`;
+  return `1 Hz: full FIFO playback is visualized at 1/16 hardware speed: 16 s per visible 16x16 frame, 1 s per row, 1/16 s per column.`;
 }
 
 function drawPressureObject(root) {
@@ -502,8 +502,8 @@ function showScanResult(hardware, forceFifo = false) {
 }
 
 function scanVisualizationMode() {
-  if (demo.refreshRate > 100) return "direct";
-  if (demo.refreshRate > 5) return "row";
+  if (demo.refreshRate > 10) return "direct";
+  if (demo.refreshRate > 1) return "row";
   return "fifo";
 }
 
@@ -550,7 +550,7 @@ function startFifoPlayback(hardware) {
 }
 
 function fifoPlaybackInterval() {
-  return Math.max(22, Math.min(120, (1000 / Math.max(1, demo.refreshRate)) / 16));
+  return (1000 / Math.max(1, demo.refreshRate)) / 16;
 }
 
 function applyFifoWord() {
@@ -714,8 +714,8 @@ function scheduleNextAutoRow() {
 }
 
 function autoScanDelay() {
-  if (demo.refreshRate > 100) return Math.max(10, 1000 / demo.refreshRate);
-  if (demo.refreshRate > 5) return Math.max(18, 1000 / demo.refreshRate);
+  if (demo.refreshRate > 10) return Math.max(10, 1000 / demo.refreshRate);
+  if (demo.refreshRate > 1) return 1000 / demo.refreshRate;
   return fifoPlaybackInterval();
 }
 
