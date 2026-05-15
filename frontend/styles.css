@@ -703,6 +703,24 @@ h2 {
   accent-color: var(--teal);
 }
 
+.mosi-input {
+  width: 100%;
+  min-height: 92px;
+  padding: 9px 10px;
+  color: var(--ink);
+  background: #fbfdfb;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font:
+    0.78rem/1.45 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  resize: vertical;
+}
+
+.mosi-input:focus {
+  outline: 2px solid rgba(30, 138, 165, 0.22);
+  border-color: var(--teal);
+}
+
 .demo-controls output {
   color: var(--ink);
   font-weight: 800;

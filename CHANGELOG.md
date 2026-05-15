@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-05-15 - Manual ADC MOSI Program
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Feature]** Added a programmable MAX11632 MOSI input simulator.
+   - The FSR demo now accepts one or more user-entered MOSI bytes.
+   - The backend decodes each byte as a MAX11632 input byte and executes setup, averaging, reset, or conversion behavior.
+   - Conversion commands produce real simulated MISO output from the virtual ADC FIFO.
+
+2. **[Logic]** Added channel-range handling for MAX11632 scan modes.
+   - Conversion mode `00` scans AIN0 through the selected channel.
+   - Conversion mode `01` scans from the selected channel through AIN15.
+   - Conversion mode `10` repeats one channel according to the averaging-register scan count.
+   - Conversion mode `11` returns a single selected-channel result.
+
+3. **[Appearance]** Replaced the Step Row button with manual MOSI controls.
+   - The left control panel now has a MOSI byte input area and a Run MOSI button.
+   - Manual MOSI/MISO results are shown inside the SPI transfer panel.
+
 ## 2026-05-15 - ADC DOUT Format and Wider Readout Panel
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

@@ -488,19 +488,33 @@ class ADC:
             "stage": "sample -> SAR convert -> FIFO",
         }
 
-    def start_scan(self, voltages: list[float], command: dict | None = None) -> dict:
+    def channels_for_command(self, command: dict, nscan: int = 0) -> list[int]:
+        channel = int(command.get("startChannel", 15))
+        mode = int(command.get("scanMode", 0))
+        if mode == 0b00:
+            return list(range(1, channel + 2))
+        if mode == 0b01:
+            return list(range(channel + 1, self.channels + 1))
+        if mode == 0b10:
+            count = [4, 8, 12, 16][max(0, min(3, nscan))]
+            return [channel + 1 for _ in range(count)]
+        return [channel + 1]
+
+    def start_scan(self, voltages: list[float], command: dict | None = None, nscan: int = 0) -> dict:
         command = self.scan_command() if command is None else command
         self.eoc = 1
         self.fifo = []
         conversions = []
-        for index, voltage in enumerate(voltages[: self.channels]):
-            conversion = self.sar_convert(index + 1, voltage)
+        for channel in self.channels_for_command(command, nscan=nscan):
+            if not 1 <= channel <= min(self.channels, len(voltages)):
+                continue
+            conversion = self.sar_convert(channel, voltages[channel - 1])
             self.fifo.append(conversion)
             conversions.append(conversion)
         self.eoc = 0
         return {
             "command": command,
-            "channels": [f"AIN{index}" for index in range(len(conversions))],
+            "channels": [conversion["ain"] for conversion in conversions],
             "conversions": conversions,
             "fifoDepth": len(self.fifo),
             "eoc": self.eoc,

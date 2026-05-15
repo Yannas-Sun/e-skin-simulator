@@ -8,6 +8,7 @@ const demo = {
   auto: false,
   timer: null,
   hardware: null,
+  mosiResult: null,
   placingObject: false,
   receivedCodes: Array.from({ length: 16 }, () => Array(16).fill(null)),
 };
@@ -29,6 +30,9 @@ const adcVoltage = document.getElementById("adcVoltage");
 const adcCode = document.getElementById("adcCode");
 const spiFrame = document.getElementById("spiFrame");
 const adcInputTable = document.getElementById("adcInputTable");
+const manualMosi = document.getElementById("manualMosi");
+const runMosi = document.getElementById("runMosi");
+const mosiStatus = document.getElementById("mosiStatus");
 
 const layout = {
   dmuxX: 70,
@@ -142,6 +146,24 @@ async function requestHardwareState() {
   receiveMisoFrame(demo.hardware);
 }
 
+async function requestManualMosi() {
+  const response = await fetch("/api/adc-mosi", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      row: demo.row,
+      objectRow: demo.objectRow,
+      col: demo.col,
+      objectSize: demo.objectSize,
+      objectMass: demo.objectMass,
+      mosi: manualMosi.value,
+    }),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "MOSI program failed");
+  return result;
+}
+
 function drawCircuit() {
   if (!demo.hardware) return;
   svgEl.innerHTML = "";
@@ -172,7 +194,7 @@ function drawCircuit() {
   const rates = demo.hardware.mcu.lineRates;
   const uplink = demo.hardware.moduleUplink;
   const uplinkRates = uplink.lineRates;
-  spiFrame.textContent = [
+  const spiLines = [
     `Internal ADC SPI, ADC -> STM32G474`,
     `REFRESH = ${demo.hardware.mcu.framesPerSecond.toFixed(0)} full 16x16 frame/s`,
     `COUNTED = ${demo.hardware.mcu.rowsCounted} row scans/frame`,
@@ -202,7 +224,36 @@ function drawCircuit() {
     `MOSI          ${uplinkRates.MOSI.perFrame.toFixed(0).padStart(5)} bit       ${formatRate(uplinkRates.MOSI.perSecond, uplinkRates.MOSI.unit)}`,
     `MISO          ${uplinkRates.MISO.perFrame.toFixed(0).padStart(5)} bit       ${formatRate(uplinkRates.MISO.perSecond, uplinkRates.MISO.unit)}`,
     `CS            ${uplinkRates.CS.perFrame.toFixed(0).padStart(5)} assert    ${formatRate(uplinkRates.CS.perSecond, uplinkRates.CS.unit)}`,
-  ].join("\n");
+  ];
+  if (demo.mosiResult) {
+    spiLines.push("", ...manualMosiLines(demo.mosiResult));
+  }
+  spiFrame.textContent = spiLines.join("\n");
+}
+
+function manualMosiLines(result) {
+  const lines = [
+    `Manual MOSI program`,
+    `INPUT = ${result.mosiBytes.join(" ") || "none"}`,
+    `SETUP = ${result.setupState.hex} ${result.setupState.binary}`,
+    `AVG = ${result.averagingState.hex} ${result.averagingState.binary}`,
+    `MISO total = ${result.misoWords.length} x 16-bit word`,
+  ];
+  for (const tx of result.transactions) {
+    lines.push(
+      `#${tx.index} MOSI ${tx.mosi.hex} ${tx.mosi.binary}`,
+      `   ${tx.decoded.tableRow}: ${tx.effect}`,
+    );
+    if (tx.misoWords.length) {
+      lines.push(`   MISO:`);
+      for (const word of tx.misoWords) {
+        lines.push(`   ${word.hex} ${word.binary} bytes=[${word.bytes.join(", ")}]`);
+      }
+    } else {
+      lines.push(`   MISO: idle`);
+    }
+  }
+  return lines;
 }
 
 function renderAdcInputTable() {
@@ -484,6 +535,22 @@ function syncFromControls() {
   updateDemo();
 }
 
+async function runManualMosi() {
+  runMosi.disabled = true;
+  mosiStatus.textContent = "running MOSI bytes through virtual MAX11632...";
+  try {
+    demo.mosiResult = await requestManualMosi();
+    mosiStatus.textContent = `done: ${demo.mosiResult.misoWords.length} MISO word(s)`;
+    drawCircuit();
+  } catch (error) {
+    demo.mosiResult = null;
+    mosiStatus.textContent = error.message;
+    drawCircuit();
+  } finally {
+    runMosi.disabled = false;
+  }
+}
+
 function stepRow() {
   demo.row = demo.row === 16 ? 1 : demo.row + 1;
   updateDemo();
@@ -509,7 +576,7 @@ refreshRateRange.addEventListener("input", syncFromControls);
 svgEl.addEventListener("pointerdown", beginObjectPlacement);
 window.addEventListener("pointermove", updateObjectPlacement);
 window.addEventListener("pointerup", endObjectPlacement);
-document.getElementById("singleStep").addEventListener("click", stepRow);
 document.getElementById("autoScan").addEventListener("click", toggleAutoScan);
+runMosi.addEventListener("click", runManualMosi);
 
 updateDemo();

@@ -44,7 +44,12 @@
           </label>
           <p id="refreshRateNote" class="control-note"></p>
           <button id="autoScan" class="text-button" type="button">Auto Scan</button>
-          <button id="singleStep" class="text-button" type="button">Step Row</button>
+          <label>
+            <span>Manual ADC MOSI</span>
+            <textarea id="manualMosi" class="mosi-input" rows="4" spellcheck="false">0xF8</textarea>
+          </label>
+          <button id="runMosi" class="text-button" type="button">Run MOSI</button>
+          <p id="mosiStatus" class="control-note">Enter bytes such as 0x68, 0x20, 0xF8 or 11111000.</p>
         </aside>
 
         <section class="circuit-panel">

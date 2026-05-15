@@ -6,7 +6,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from .fsr_sampler import run_fsr_readout
+from .fsr_sampler import run_adc_mosi_program, run_fsr_readout
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -155,6 +155,9 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/api/fsr-readout":
             self.handle_fsr_readout()
             return
+        if self.path == "/api/adc-mosi":
+            self.handle_adc_mosi()
+            return
         self.send_error(404)
 
     def handle_simulation(self) -> None:
@@ -186,6 +189,28 @@ class Handler(SimpleHTTPRequestHandler):
             object_mass=float(payload.get("objectMass", payload.get("force", 62) * 10)),
             refresh_rate=float(payload.get("refreshRate", 10)),
         )
+        self.write_json(response)
+
+    def handle_adc_mosi(self) -> None:
+        length = int(self.headers.get("Content-Length", "0"))
+        payload = json.loads(self.rfile.read(length) or b"{}")
+        try:
+            response = run_adc_mosi_program(
+                mosi_text=str(payload.get("mosi", "")),
+                row=int(payload.get("row", 1)),
+                col=int(payload.get("col", 8)),
+                object_row=int(payload.get("objectRow", payload.get("row", 1))),
+                object_size=float(payload.get("objectSize", 72)),
+                object_mass=float(payload.get("objectMass", payload.get("force", 62) * 10)),
+            )
+        except (TypeError, ValueError) as exc:
+            self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            data = json.dumps({"error": str(exc)}).encode("utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
         self.write_json(response)
 
     def write_json(self, response: dict[str, Any]) -> None:

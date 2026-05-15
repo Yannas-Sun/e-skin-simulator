@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 
 from .fsr_hardware import ADC, Clock, DMUX, FSRArray, MCUTransferCounter, ModuleUplinkSPI, SPIBus
 
@@ -194,3 +195,154 @@ def run_fsr_readout(row: int, col: int, force: float, object_row: int | None = N
     object_mass = max(0.0, min(1000.0, float(force) * 10.0 if object_mass is None else float(object_mass)))
     refresh_rate = max(1.0, min(700.0, float(refresh_rate)))
     return FSRReadoutProgram.create(refresh_rate).tick(row, object_row, col, object_size, object_mass)
+
+
+def parse_mosi_bytes(text: str) -> list[int]:
+    tokens = re.split(r"[\s,;]+", text.strip())
+    values: list[int] = []
+    for token in tokens:
+        if not token:
+            continue
+        cleaned = token.replace("_", "")
+        if cleaned.lower().startswith("0b"):
+            value = int(cleaned[2:], 2)
+        elif cleaned.lower().startswith("0x"):
+            value = int(cleaned[2:], 16)
+        elif re.fullmatch(r"[01]{8}", cleaned):
+            value = int(cleaned, 2)
+        elif re.fullmatch(r"[0-9a-fA-F]{2}", cleaned) and re.search(r"[a-fA-F]", cleaned):
+            value = int(cleaned, 16)
+        else:
+            value = int(cleaned, 10)
+        if not 0 <= value <= 0xFF:
+            raise ValueError(f"MOSI byte out of range: {token}")
+        values.append(value)
+    return values
+
+
+def command_from_input_byte(adc: ADC, value: int) -> dict:
+    decoded = adc.describe_input_byte(value)
+    if decoded["register"] == "conversion":
+        fields = decoded["fields"]
+        return adc.scan_command(
+            start_channel=int(fields["CHSEL"]),
+            scan_mode=int(fields["SCAN"]),
+            x_bit=int(fields["X"]),
+        )
+    return decoded
+
+
+def run_adc_mosi_program(
+    mosi_text: str,
+    row: int,
+    col: int,
+    object_row: int | None = None,
+    object_size: float = 72.0,
+    object_mass: float = 620.0,
+) -> dict:
+    row = max(1, min(16, int(row)))
+    object_row = row if object_row is None else max(1, min(16, int(object_row)))
+    col = max(1, min(16, int(col)))
+    object_size = max(20.0, min(240.0, float(object_size)))
+    object_mass = max(0.0, min(1000.0, float(object_mass)))
+
+    adc = ADC()
+    dmux = DMUX()
+    array = FSRArray()
+    dmux.set_selected_row(row)
+    column_nodes = array.read_row(
+        dmux=dmux,
+        pressed_row=object_row,
+        pressed_col=col,
+        object_size=object_size,
+        object_mass=object_mass,
+    )
+    voltages = [node["nodeVoltage"] for node in column_nodes]
+
+    setup = adc.setup_command(clock_mode=0b10, reference_mode=0b10)
+    averaging = adc.averaging_command(avg_on=False, navg=0, nscan=0)
+    mosi_values = parse_mosi_bytes(mosi_text)
+    transactions = []
+    all_miso_words: list[int] = []
+
+    for index, value in enumerate(mosi_values, start=1):
+        decoded = adc.describe_input_byte(value)
+        miso_words: list[int] = []
+        effect = "decoded only"
+        fifo_depth = len(adc.fifo)
+
+        if decoded["register"] == "setup":
+            fields = decoded["fields"]
+            setup = adc.setup_command(clock_mode=int(fields["CKSEL"]), reference_mode=int(fields["REFSEL"]))
+            effect = setup["label"]
+        elif decoded["register"] == "averaging":
+            fields = decoded["fields"]
+            averaging = adc.averaging_command(
+                avg_on=bool(fields["AVGON"]),
+                navg=int(fields["NAVG"]),
+                nscan=int(fields["NSCAN"]),
+            )
+            effect = averaging["label"]
+        elif decoded["register"] == "reset":
+            reset_bit = int(decoded["fields"]["RESET"])
+            if reset_bit == 1:
+                adc.fifo = []
+                adc.eoc = 1
+                effect = "FIFO cleared"
+            else:
+                adc = ADC()
+                setup = adc.setup_command(clock_mode=0b10, reference_mode=0b10)
+                averaging = adc.averaging_command(avg_on=False, navg=0, nscan=0)
+                effect = "registers reset to power-up defaults"
+            fifo_depth = len(adc.fifo)
+        elif decoded["register"] == "conversion":
+            command = command_from_input_byte(adc, value)
+            scan = adc.start_scan(voltages, command=command, nscan=int(averaging["nscan"]))
+            miso_words = [int(sample["doutWord"]) for sample in adc.read_fifo()]
+            all_miso_words.extend(miso_words)
+            fifo_depth = int(scan["fifoDepth"])
+            effect = scan["command"]["scanModeLabel"]
+        else:
+            effect = "reserved input byte; no conversion"
+
+        transactions.append(
+            {
+                "index": index,
+                "mosi": {
+                    "value": value,
+                    "hex": f"0x{value:02X}",
+                    "binary": format(value, "08b"),
+                },
+                "decoded": decoded,
+                "effect": effect,
+                "fifoDepth": fifo_depth,
+                "misoWords": [
+                    {
+                        "value": word,
+                        "hex": f"0x{word:04X}",
+                        "binary": format(word, "016b"),
+                        "bytes": [(word >> 8) & 0xFF, word & 0xFF],
+                    }
+                    for word in miso_words
+                ],
+            }
+        )
+
+    return {
+        "row": row,
+        "objectRow": object_row,
+        "pressedCol": col,
+        "mosiBytes": [f"0x{value:02X}" for value in mosi_values],
+        "setupState": setup,
+        "averagingState": averaging,
+        "transactions": transactions,
+        "misoWords": [
+            {
+                "value": word,
+                "hex": f"0x{word:04X}",
+                "binary": format(word, "016b"),
+                "bytes": [(word >> 8) & 0xFF, word & 0xFF],
+            }
+            for word in all_miso_words
+        ],
+    }
