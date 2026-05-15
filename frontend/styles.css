@@ -692,6 +692,10 @@ h2 {
   fill: #f7faf8;
 }
 
+.block.fpga-hub {
+  fill: #f3f8f7;
+}
+
 .block.dmux {
   fill: #fffdf8;
 }
@@ -809,6 +813,13 @@ h2 {
 .spi-active {
   stroke-width: 4;
   opacity: 1;
+}
+
+.uplink-wire {
+  stroke: #53605c;
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+  vector-effect: non-scaling-stroke;
 }
 
 .spi-mosi {

@@ -168,8 +168,10 @@ function drawCircuit() {
   scanState.textContent = demo.auto ? "auto scan" : "manual";
   svgEl.classList.toggle("no-animation", demo.refreshRate > 10);
   const rates = demo.hardware.mcu.lineRates;
+  const uplink = demo.hardware.moduleUplink;
+  const uplinkRates = uplink.lineRates;
   spiFrame.textContent = [
-    `MCU transfer counter`,
+    `Internal ADC SPI, ADC -> STM32G474`,
     `REFRESH = ${demo.hardware.mcu.framesPerSecond.toFixed(0)} full 16x16 frame/s`,
     `COUNTED = ${demo.hardware.mcu.rowsCounted} row scans/frame`,
     ``,
@@ -182,15 +184,43 @@ function drawCircuit() {
     `CS edges      ${rates.CS.edgesPerFrame.toFixed(0).padStart(5)} edge      ${rates.CS.edgesPerSecond.toFixed(0)} edge/s`,
     ``,
     `MOSI command: ${demo.hardware.spi.command.binary}`,
-    `Line state source: current MCU row transaction`,
+    ``,
+    `Module uplink SPI, STM32G474 -> ${uplink.upperLayer}`,
+    `MODE = ${uplink.mode}`,
+    `COMMAND = ${uplink.command.label}, ${uplink.command.bits} bit/frame`,
+    `RESULT = ${uplink.samplesPerFrame} samples x ${uplink.sampleBits} bit + ${uplink.metadataBytes} B metadata`,
+    `Required SCK = ${formatRate(uplink.clock.requiredSckHz, "pulse")}`,
+    ``,
+    `Line          per frame        per second`,
+    `SCK           ${uplinkRates.SCK.perFrame.toFixed(0).padStart(5)} pulse     ${formatRate(uplinkRates.SCK.perSecond, uplinkRates.SCK.unit)}`,
+    `MOSI          ${uplinkRates.MOSI.perFrame.toFixed(0).padStart(5)} bit       ${formatRate(uplinkRates.MOSI.perSecond, uplinkRates.MOSI.unit)}`,
+    `MISO          ${uplinkRates.MISO.perFrame.toFixed(0).padStart(5)} bit       ${formatRate(uplinkRates.MISO.perSecond, uplinkRates.MISO.unit)}`,
+    `CS            ${uplinkRates.CS.perFrame.toFixed(0).padStart(5)} assert    ${formatRate(uplinkRates.CS.perSecond, uplinkRates.CS.unit)}`,
   ].join("\n");
 }
 
 function drawMcu(root) {
   root.appendChild(svg("rect", { x: layout.mcuX, y: layout.mcuY, width: layout.mcuW, height: layout.mcuH, rx: 8, class: "block mcu" }));
-  addText(root, "MCU", layout.mcuX + layout.mcuW / 2, layout.mcuY + 48, { class: "block-title", "text-anchor": "middle" });
-  addText(root, "Teensy 4.1 style", layout.mcuX + layout.mcuW / 2, layout.mcuY + 77, { class: "small-label", "text-anchor": "middle" });
+  addText(root, "STM32G474", layout.mcuX + layout.mcuW / 2, layout.mcuY + 48, { class: "block-title", "text-anchor": "middle" });
+  addText(root, "module MCU", layout.mcuX + layout.mcuW / 2, layout.mcuY + 77, { class: "small-label", "text-anchor": "middle" });
   drawAddressBus(root);
+  drawUplinkBus(root);
+}
+
+function drawUplinkBus(root) {
+  const hubX = layout.mcuX;
+  const hubY = layout.mcuY + layout.mcuH + 28;
+  const hubW = layout.mcuW;
+  const hubH = 58;
+  root.appendChild(svg("rect", { x: hubX, y: hubY, width: hubW, height: hubH, rx: 8, class: "block fpga-hub" }));
+  addText(root, "Upper FPGA/Hub", hubX + hubW / 2, hubY + 28, { class: "block-title", "text-anchor": "middle" });
+  addText(root, "SPI command + raw frame", hubX + hubW / 2, hubY + 49, { class: "small-label", "text-anchor": "middle" });
+  const lines = ["SCK", "MOSI", "MISO", "CS"];
+  for (let i = 0; i < lines.length; i += 1) {
+    const x = layout.mcuX + 34 + i * 45;
+    line(root, x, layout.mcuY + layout.mcuH, x, hubY, "uplink-wire");
+    addText(root, lines[i], x, hubY - 8, { class: "pin-label", "text-anchor": "middle" });
+  }
 }
 
 function drawAddressBus(root) {

@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-05-15 - Module MCU Uplink SPI Model
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Added a module-to-upper-layer SPI transfer model.
+   - The FSR demo now models STM32G474 as the module MCU.
+   - After the initial raw 16x16 scan, STM32G474 sends one raw frame to an upper FPGA/Hub over SPI.
+   - The uplink model includes SCK, MOSI command, MISO raw result, CS windows, metadata, and required SCK rate.
+
+2. **[Appearance]** Updated the FSR demo architecture view.
+   - The circuit now labels the module MCU as STM32G474.
+   - A Patch FPGA/Hub block and four SPI uplink wires are shown near the module MCU.
+
+3. **[Docs]** Updated the readout text for the initial no-algorithm scan mode.
+   - The right-side transfer panel separates internal ADC SPI from module uplink SPI.
+   - The readout logic states that no event-driven or encoder algorithm is currently applied.
+
 ## 2026-05-14 - Remove Live Waveform Display
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

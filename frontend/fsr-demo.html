@@ -11,10 +11,11 @@
       <header class="demo-header">
         <div>
           <p class="eyebrow">Hardware readout demo</p>
-          <h1>16 x 16 FSR Array: DMUX to ADC to MCU</h1>
+          <h1>16 x 16 FSR Array: DMUX to ADC to STM32G474 to FPGA</h1>
           <p>
             A row-select demultiplexer energizes one FSR row at a time. The ADC is commanded over MOSI to scan
-            AIN0-AIN15, writes SAR results into FIFO, pulls EOC low, then streams FIFO words back over MISO.
+            AIN0-AIN15, writes SAR results into FIFO, pulls EOC low, then streams FIFO words back to the module MCU.
+            The STM32G474 then sends the raw frame to the upper FPGA/Hub over SPI.
           </p>
         </div>
         <a class="text-button link-button" href="index.html">Back to Dashboard</a>
@@ -74,8 +75,8 @@
 
           <div class="panel-section">
             <div class="section-title">
-              <h2>SPI Frame</h2>
-              <span>ADC -> MCU</span>
+              <h2>SPI Transfer</h2>
+              <span>ADC + uplink</span>
             </div>
             <pre id="spiFrame" class="spi-frame"></pre>
           </div>
@@ -90,7 +91,9 @@
               <li>DMUX drives one row electrode with Vcc.</li>
               <li>Each column is pulled to ground through 10 kOhm.</li>
               <li>Pressed FSR cells reduce resistance and raise column voltage.</li>
-              <li>MCU sends an ADC scan command, waits for EOC low, then clocks FIFO values out on MISO.</li>
+              <li>STM32G474 sends an ADC scan command, waits for EOC low, then clocks FIFO values out on MISO.</li>
+              <li>After a full 16x16 frame, STM32G474 returns raw frame data to the upper FPGA/Hub over SPI.</li>
+              <li>No event-driven encoding or learned encoder is applied in this initial mode.</li>
             </ul>
           </div>
         </aside>

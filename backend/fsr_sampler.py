@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .fsr_hardware import ADC, Clock, DMUX, FSRArray, MCUTransferCounter, SPIBus
+from .fsr_hardware import ADC, Clock, DMUX, FSRArray, MCUTransferCounter, ModuleUplinkSPI, SPIBus
 
 
 @dataclass
@@ -13,11 +13,19 @@ class FSRReadoutProgram:
     array: FSRArray
     adc: ADC
     spi: SPIBus
+    uplink: ModuleUplinkSPI
     clock: Clock
 
     @classmethod
     def create(cls, refresh_rate: float = 10.0) -> "FSRReadoutProgram":
-        return cls(dmux=DMUX(), array=FSRArray(), adc=ADC(), spi=SPIBus(), clock=Clock(refresh_rate))
+        return cls(
+            dmux=DMUX(),
+            array=FSRArray(),
+            adc=ADC(),
+            spi=SPIBus(),
+            uplink=ModuleUplinkSPI(),
+            clock=Clock(refresh_rate),
+        )
 
     def tick(self, selected_row: int, pressed_row: int, pressed_col: int, object_size: float, object_mass: float) -> dict:
         # Address phase: MCU drives A1-A4, DMUX decodes exactly one row.
@@ -101,6 +109,7 @@ class FSRReadoutProgram:
                 "scan": adc_scan,
             },
             "spi": spi_frame,
+            "moduleUplink": self.uplink.snapshot(self.clock.refresh_hz, module_id=1),
             "mcu": mcu_stats,
             "clock": self.clock.snapshot(),
             "clockTrace": clock_trace,

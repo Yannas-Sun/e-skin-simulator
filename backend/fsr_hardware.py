@@ -6,6 +6,9 @@ from dataclasses import dataclass
 VCC = 3.3
 ADC_BITS = 12
 ADC_MAX_CODE = (1 << ADC_BITS) - 1
+MODULE_FRAME_METADATA_BYTES = 20
+MODULE_UPLINK_COMMAND_BITS = 32
+MODULE_UPLINK_WORD_BITS = 16
 
 
 @dataclass
@@ -111,6 +114,115 @@ class MCUTransferCounter:
             "rowsCounted": len(self.events),
             "lineRates": line_rates,
             "events": self.events,
+        }
+
+
+class ModuleUplinkSPI:
+    """Patch-level SPI link between one STM32G474 module MCU and the upper FPGA/hub."""
+
+    def __init__(self, rows: int = 16, cols: int = 16, sample_bits: int = MODULE_UPLINK_WORD_BITS) -> None:
+        self.rows = rows
+        self.cols = cols
+        self.sample_bits = sample_bits
+        self.command_bits = MODULE_UPLINK_COMMAND_BITS
+        self.metadata_bytes = MODULE_FRAME_METADATA_BYTES
+
+    @property
+    def samples_per_frame(self) -> int:
+        return self.rows * self.cols
+
+    @property
+    def payload_bits_per_frame(self) -> int:
+        return self.samples_per_frame * self.sample_bits
+
+    @property
+    def metadata_bits_per_frame(self) -> int:
+        return self.metadata_bytes * 8
+
+    @property
+    def miso_bits_per_frame(self) -> int:
+        return self.payload_bits_per_frame + self.metadata_bits_per_frame
+
+    @property
+    def sck_pulses_per_frame(self) -> int:
+        return self.command_bits + self.miso_bits_per_frame
+
+    def snapshot(self, refresh_hz: float, module_id: int = 1) -> dict:
+        refresh_hz = max(1.0, min(700.0, float(refresh_hz)))
+        frame_period_s = 1.0 / refresh_hz
+        required_sck_hz = self.sck_pulses_per_frame / frame_period_s
+        line_rates = {
+            "SCK": {
+                "perFrame": float(self.sck_pulses_per_frame),
+                "perSecond": self.sck_pulses_per_frame * refresh_hz,
+                "unit": "pulse",
+                "detail": "Upper FPGA/Hub clocks one command window and one raw-frame readback window.",
+            },
+            "MOSI": {
+                "perFrame": float(self.command_bits),
+                "perSecond": self.command_bits * refresh_hz,
+                "unit": "bit",
+                "detail": "Upper FPGA/Hub command to the STM32G474 module MCU.",
+            },
+            "MISO": {
+                "perFrame": float(self.miso_bits_per_frame),
+                "perSecond": self.miso_bits_per_frame * refresh_hz,
+                "unit": "bit",
+                "detail": "STM32G474 raw frame output: 16-bit samples plus frame metadata.",
+            },
+            "CS": {
+                "perFrame": 2.0,
+                "perSecond": 2.0 * refresh_hz,
+                "unit": "assertion",
+                "edgesPerFrame": 4.0,
+                "edgesPerSecond": 4.0 * refresh_hz,
+                "detail": "One command select window and one readback select window per full module frame.",
+            },
+        }
+        return {
+            "name": "Module MCU upstream SPI",
+            "moduleId": module_id,
+            "moduleMcu": "STM32G474",
+            "upperLayer": "Patch FPGA/Hub",
+            "mode": "initial raw scan transfer",
+            "framesPerSecond": refresh_hz,
+            "samplesPerFrame": self.samples_per_frame,
+            "sampleBits": self.sample_bits,
+            "metadataBytes": self.metadata_bytes,
+            "command": {
+                "direction": "FPGA/Hub -> STM32G474",
+                "bits": self.command_bits,
+                "fields": ["opcode", "module_id", "scan_mode", "frame_counter", "crc"],
+                "label": "START_RAW_SCAN",
+            },
+            "result": {
+                "direction": "STM32G474 -> FPGA/Hub",
+                "payloadBits": self.payload_bits_per_frame,
+                "metadataBits": self.metadata_bits_per_frame,
+                "totalBits": self.miso_bits_per_frame,
+                "encoding": "raw 16-bit ADC code per FSR taxel",
+            },
+            "clock": {
+                "requiredSckHz": required_sck_hz,
+                "note": "Minimum continuous SPI clock needed to move one command and one raw result frame inside the selected frame period.",
+            },
+            "lineRates": line_rates,
+            "transactions": [
+                {
+                    "phase": "command",
+                    "cs": "LOW",
+                    "sckPulses": self.command_bits,
+                    "mosi": "START_RAW_SCAN command",
+                    "miso": "idle",
+                },
+                {
+                    "phase": "readback",
+                    "cs": "LOW",
+                    "sckPulses": self.miso_bits_per_frame,
+                    "mosi": "dummy clocks / optional flow-control bits",
+                    "miso": "metadata + 256 raw 16-bit samples",
+                },
+            ],
         }
 
 
