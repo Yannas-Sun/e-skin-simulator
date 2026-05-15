@@ -153,9 +153,11 @@ async function fetchHardwareRow(row) {
 
 async function requestHardwareState() {
   if (scanVisualizationMode() === "direct") {
-    const rows = await Promise.all(Array.from({ length: 16 }, (_, index) => fetchHardwareRow(index + 1)));
-    for (const rowState of rows) applyScannedRow(rowState);
-    demo.hardware = rows[Math.max(0, Math.min(15, demo.row - 1))] || rows[0];
+    for (let row = 1; row <= 16; row += 1) {
+      const rowState = await fetchHardwareRow(row);
+      demo.hardware = rowState;
+      await applyScannedRowCells(rowState, false);
+    }
     stopFifoPlayback();
     demo.fifoPlayback = {
       active: false,
@@ -168,7 +170,7 @@ async function requestHardwareState() {
     return;
   }
   demo.hardware = await fetchHardwareRow(demo.row);
-  showScanResult(demo.hardware);
+  await showScanResult(demo.hardware);
 }
 
 async function requestManualMosi() {
@@ -506,14 +508,13 @@ function heatmapIntensity(code) {
   return Math.max(0, Math.min(1, signal / 1800));
 }
 
-function showScanResult(hardware, forceFifo = false) {
+async function showScanResult(hardware, forceFifo = false) {
   const mode = forceFifo ? "fifo" : scanVisualizationMode();
   if (mode === "fifo") {
     startFifoPlayback(hardware);
     return;
   }
   stopFifoPlayback();
-  applyScannedRow(hardware);
   demo.fifoPlayback = {
     active: false,
     row: hardware.row,
@@ -521,7 +522,8 @@ function showScanResult(hardware, forceFifo = false) {
     words: hardware.spi?.words?.slice(0, 16) || [],
     mode,
   };
-  drawCircuit();
+  await applyScannedRowCells(hardware, mode === "row");
+  if (mode !== "row") drawCircuit();
 }
 
 function scanVisualizationMode() {
@@ -539,6 +541,23 @@ function applyScannedRow(hardware) {
   const words = hardware.spi?.words || [];
   if (rowIndex < 0 || rowIndex >= 16 || words.length !== 16) return;
   demo.receivedCodes[rowIndex] = words.slice(0, 16);
+}
+
+async function applyScannedRowCells(hardware, renderEachCell) {
+  const rowIndex = hardware.row - 1;
+  const words = hardware.spi?.words || [];
+  if (rowIndex < 0 || rowIndex >= 16 || words.length !== 16) return;
+  for (let colIndex = 0; colIndex < 16; colIndex += 1) {
+    demo.receivedCodes[rowIndex][colIndex] = words[colIndex];
+    if (renderEachCell) {
+      drawCircuit();
+      await sleep(cellUploadInterval());
+    }
+  }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function stopFifoPlayback() {
@@ -742,8 +761,11 @@ function scheduleNextAutoRow() {
 
 function autoScanDelay() {
   if (demo.refreshRate > 10) return Math.max(10, 1000 / demo.refreshRate);
-  if (demo.refreshRate > 1) return 1000 / demo.refreshRate;
-  return fifoPlaybackInterval();
+  return 0;
+}
+
+function cellUploadInterval() {
+  return (1000 / Math.max(1, demo.refreshRate)) / 16;
 }
 
 objectSizeRange.addEventListener("input", syncFromControls);

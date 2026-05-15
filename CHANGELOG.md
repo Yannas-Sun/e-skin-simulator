@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-05-15 - Unified Scan and Heatmap Pipeline
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Unified scan strategy across all refresh-rate visualization modes.
+   - All modes now follow the same MUX row order and ADC FIFO column order: R1-R16, then C1-C16 per row.
+   - High-frequency direct mode no longer requests all rows in parallel; it performs the same sequential row scan without drawing the animation.
+   - Heatmap storage is updated per scanned FIFO word rather than by treating a row as one visual batch.
+
+2. **[Appearance]** Kept animation differences strictly visual.
+   - 1 Hz can still show row and FIFO column playback.
+   - 1-10 Hz shows only the MUX row scan while cell values are still committed in FIFO order.
+   - Above 10 Hz hides both row and column scan highlights while keeping the same scan-derived heatmap data path.
+
 ## 2026-05-15 - Hide MUX Scan in Direct Mode
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
