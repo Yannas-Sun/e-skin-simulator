@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-05-15 - FIFO Column Scan Animation
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Feature]** Added FIFO-style vertical scan playback to the FSR demo.
+   - After each selected-row conversion, the UI now replays ADC FIFO output from C1 to C16.
+   - The middle circuit highlights the current vertical column being clocked out through MISO.
+   - The hardware heatmap updates cells in FIFO order instead of painting the full row at once.
+
+2. **[Appearance]** Added a visible FIFO readout cursor.
+   - The active column line, selected FSR cell, sample node, and readout path now use a blue FIFO scan highlight.
+   - The current reading label shows the active FIFO row and column during playback.
+
 ## 2026-05-15 - Manual ADC MOSI Program
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

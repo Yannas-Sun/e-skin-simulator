@@ -7,6 +7,8 @@ const demo = {
   refreshRate: 10,
   auto: false,
   timer: null,
+  fifoTimer: null,
+  fifoPlayback: null,
   hardware: null,
   mosiResult: null,
   placingObject: false,
@@ -143,7 +145,7 @@ async function requestHardwareState() {
     }),
   });
   demo.hardware = await response.json();
-  receiveMisoFrame(demo.hardware);
+  startFifoPlayback(demo.hardware);
 }
 
 async function requestManualMosi() {
@@ -183,7 +185,8 @@ function drawCircuit() {
   fsrResistance.textContent = formatOhms(active.fsrOhms);
   adcVoltage.textContent = `${active.nodeVoltage.toFixed(2)} V`;
   adcCode.textContent = String(active.code);
-  activeCell.textContent = `R${demo.objectRow},C${demo.col}`;
+  const fifoCol = fifoCursorCol();
+  activeCell.textContent = fifoCol ? `FIFO R${demo.row},C${fifoCol}` : `R${demo.objectRow},C${demo.col}`;
   objectSizeValue.textContent = `${demo.objectSize} mm`;
   objectMassValue.textContent = `${demo.objectMass} g`;
   refreshRateValue.textContent = `${demo.refreshRate} Hz`;
@@ -326,6 +329,7 @@ function drawDmux(root) {
 }
 
 function drawArray(root, columns) {
+  const fifoCol = fifoCursorCol();
   root.appendChild(svg("rect", { x: layout.arrayX, y: layout.arrayY, width: layout.arrayW, height: layout.arrayH, class: "array-bg" }));
   root.appendChild(svg("rect", { x: layout.arrayX, y: layout.arrayY, width: layout.arrayW, height: layout.arrayH, class: "array-hit-target" }));
   addText(root, "FSR array: 16 rows x 16 columns", layout.arrayX + layout.arrayW / 2, layout.arrayY - 20, { class: "block-title", "text-anchor": "middle" });
@@ -336,8 +340,9 @@ function drawArray(root, columns) {
   }
   for (let col = 1; col <= 16; col += 1) {
     const x = colX(col);
-    line(root, x, layout.arrayY + 18, x, layout.arrayY + layout.arrayH, col === demo.col ? "array-column active-wire" : "array-column");
-    addText(root, `C${col}`, x, layout.arrayY + layout.arrayH + 35, { class: col === demo.col ? "col-label active-label" : "col-label", "text-anchor": "middle" });
+    const columnActive = col === fifoCol;
+    line(root, x, layout.arrayY + 18, x, layout.arrayY + layout.arrayH, columnActive ? "array-column fifo-scan-wire" : "array-column");
+    addText(root, `C${col}`, x, layout.arrayY + layout.arrayH + 35, { class: columnActive ? "col-label active-label" : "col-label", "text-anchor": "middle" });
   }
 
   for (let row = 1; row <= 16; row += 1) {
@@ -346,13 +351,14 @@ function drawArray(root, columns) {
       const y = rowY(row);
       const code = receivedCode(row, col);
       const scannedActive = code !== null && code >= heatmapDetectionCode();
+      const fifoActive = row === demo.row && col === fifoCol;
       root.appendChild(svg("rect", {
         x: x - 10,
         y: y - 8,
         width: 20,
         height: 16,
         rx: 3,
-        class: scannedActive ? "fsr-cell covered" : "fsr-cell",
+        class: fifoActive ? "fsr-cell fifo-active" : scannedActive ? "fsr-cell covered" : "fsr-cell",
       }));
     }
   }
@@ -364,13 +370,20 @@ function drawArray(root, columns) {
     const nodeY = layout.adcY - 118;
     const resistorX = cx + 14;
     const bottomY = nodeY + 56;
-    root.appendChild(svg("circle", { cx, cy: nodeY, r: 4, class: col === demo.col ? "sample-node active-node" : "sample-node" }));
-    line(root, cx, layout.arrayY + layout.arrayH, cx, nodeY, col === demo.col ? "wire active-wire" : "wire sample-wire");
-    line(root, cx, nodeY, cx, layout.adcY, col === demo.col ? "wire active-wire" : "wire sample-wire");
-    line(root, cx, nodeY, resistorX, nodeY, col === demo.col ? "wire active-wire" : "wire");
-    resistor(root, resistorX, nodeY, true, col === demo.col ? "component-line active-component" : "component-line");
-    line(root, resistorX, nodeY + 40, resistorX, bottomY, col === demo.col ? "active-component" : "component-line");
+    const fifoActive = col === fifoCol;
+    root.appendChild(svg("circle", { cx, cy: nodeY, r: 4, class: fifoActive ? "sample-node active-node" : "sample-node" }));
+    line(root, cx, layout.arrayY + layout.arrayH, cx, nodeY, fifoActive ? "wire fifo-scan-wire" : "wire sample-wire");
+    line(root, cx, nodeY, cx, layout.adcY, fifoActive ? "wire fifo-scan-wire" : "wire sample-wire");
+    line(root, cx, nodeY, resistorX, nodeY, fifoActive ? "wire fifo-scan-wire" : "wire");
+    resistor(root, resistorX, nodeY, true, fifoActive ? "component-line active-component" : "component-line");
+    line(root, resistorX, nodeY + 40, resistorX, bottomY, fifoActive ? "active-component" : "component-line");
     drawGround(root, resistorX, bottomY);
+  }
+
+  if (fifoCol) {
+    const x = colX(fifoCol);
+    path(root, `M ${x} ${layout.arrayY - 6} L ${x} ${layout.arrayY + layout.arrayH + 104}`, "fifo-readout-flow");
+    addText(root, `FIFO -> MISO C${fifoCol}`, x + 12, layout.arrayY + 8, { class: "active-label fifo-label" });
   }
 }
 
@@ -402,6 +415,7 @@ function drawSpiBus(root) {
 }
 
 function drawHardwareHeatmap(root) {
+  const fifoCol = fifoCursorCol();
   const x0 = layout.heatmapX;
   const y0 = layout.heatmapY;
   const cell = layout.heatmapSize / 16;
@@ -418,7 +432,7 @@ function drawHardwareHeatmap(root) {
         y: y0 + (row - 1) * cell,
         width: cell - 1,
         height: cell - 1,
-        class: row === demo.row && code !== null ? "heatmap-cell active-scan" : "heatmap-cell",
+        class: row === demo.row && col === fifoCol ? "heatmap-cell active-scan" : "heatmap-cell",
         fill: `hsl(${hue}, 78%, ${lightness}%)`,
       }));
     }
@@ -465,11 +479,45 @@ function heatmapIntensity(code) {
   return Math.max(0, Math.min(1, signal / 1800));
 }
 
-function receiveMisoFrame(hardware) {
+function startFifoPlayback(hardware) {
   const rowIndex = hardware.row - 1;
   const words = hardware.spi?.words || [];
   if (rowIndex < 0 || rowIndex >= 16 || words.length !== 16) return;
-  demo.receivedCodes[rowIndex] = words.slice(0, 16);
+  if (demo.fifoTimer) window.clearInterval(demo.fifoTimer);
+  demo.fifoTimer = null;
+  demo.fifoPlayback = {
+    active: true,
+    row: hardware.row,
+    col: 1,
+    words: words.slice(0, 16),
+  };
+  applyFifoWord();
+  const interval = Math.max(18, Math.min(120, (1000 / Math.max(1, demo.refreshRate)) / 16));
+  demo.fifoTimer = window.setInterval(() => {
+    if (!demo.fifoPlayback?.active) return;
+    demo.fifoPlayback.col += 1;
+    if (demo.fifoPlayback.col > demo.fifoPlayback.words.length) {
+      window.clearInterval(demo.fifoTimer);
+      demo.fifoTimer = null;
+      demo.fifoPlayback.active = false;
+      drawCircuit();
+      return;
+    }
+    applyFifoWord();
+  }, interval);
+}
+
+function applyFifoWord() {
+  if (!demo.fifoPlayback?.active) return;
+  const rowIndex = demo.fifoPlayback.row - 1;
+  const colIndex = demo.fifoPlayback.col - 1;
+  demo.receivedCodes[rowIndex][colIndex] = demo.fifoPlayback.words[colIndex];
+  drawCircuit();
+}
+
+function fifoCursorCol() {
+  if (!demo.fifoPlayback?.active || demo.fifoPlayback.row !== demo.row) return null;
+  return demo.fifoPlayback.col;
 }
 
 function activeSpiLines() {

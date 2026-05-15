@@ -800,11 +800,16 @@ h2 {
 .active-wire,
 .active-component,
 .signal-flow,
-.active-diode {
+.active-diode,
+.fifo-scan-wire {
   stroke: #d69d28;
   stroke-width: 4;
   opacity: 1;
   vector-effect: non-scaling-stroke;
+}
+
+.fifo-scan-wire {
+  stroke: #1e8aa5;
 }
 
 .diode {
@@ -947,7 +952,18 @@ h2 {
   animation: dash-flow 900ms linear infinite;
 }
 
-.fsr-circuit.no-animation .signal-flow {
+.fifo-readout-flow {
+  fill: none;
+  stroke: #1e8aa5;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-dasharray: 8 7;
+  vector-effect: non-scaling-stroke;
+  animation: dash-flow 640ms linear infinite;
+}
+
+.fsr-circuit.no-animation .signal-flow,
+.fsr-circuit.no-animation .fifo-readout-flow {
   animation: none;
   stroke-dasharray: none;
 }
@@ -967,6 +983,13 @@ h2 {
   fill: rgba(215, 87, 69, 0.62);
   stroke: #9f3d31;
   stroke-width: 1.9;
+  stroke-dasharray: none;
+}
+
+.fsr-cell.fifo-active {
+  fill: rgba(30, 138, 165, 0.76);
+  stroke: #064f63;
+  stroke-width: 2.4;
   stroke-dasharray: none;
 }
 
@@ -1014,6 +1037,11 @@ h2 {
 .active-label {
   fill: #9f6b00;
   font-weight: 900;
+}
+
+.fifo-label {
+  fill: #0a657d;
+  font-size: 12px;
 }
 
 .step-label {
