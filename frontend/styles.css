@@ -158,6 +158,30 @@ h2 {
   font-size: 0.76rem;
 }
 
+.protocol-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.protocol-list dt {
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.protocol-list dd {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.protocol-list code {
+  color: var(--ink);
+  font-size: 0.72rem;
+}
+
 #heatmap {
   display: block;
   width: 100%;

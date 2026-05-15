@@ -6,6 +6,7 @@ from dataclasses import dataclass
 VCC = 3.3
 ADC_BITS = 12
 ADC_MAX_CODE = (1 << ADC_BITS) - 1
+MAX11632_OUTPUT_WORD_BITS = 16
 MODULE_FRAME_METADATA_BYTES = 20
 MODULE_UPLINK_COMMAND_BITS = 32
 MODULE_UPLINK_WORD_BITS = 16
@@ -19,6 +20,7 @@ class Clock:
     rows_per_frame: int = 16
     adc_channels: int = 16
     adc_bits: int = ADC_BITS
+    adc_output_word_bits: int = MAX11632_OUTPUT_WORD_BITS
 
     def __post_init__(self) -> None:
         self.refresh_hz = max(1.0, min(700.0, float(self.refresh_hz)))
@@ -33,7 +35,7 @@ class Clock:
 
     @property
     def spi_bits_per_row(self) -> int:
-        return 8 + self.adc_channels * self.adc_bits
+        return 8 + self.adc_channels * self.adc_output_word_bits
 
     @property
     def spi_clock_hz(self) -> float:
@@ -62,20 +64,21 @@ class Clock:
 class MCUTransferCounter:
     """Counts line activity produced by the MCU while it scans one full frame."""
 
-    def __init__(self, adc_bits: int = ADC_BITS) -> None:
+    def __init__(self, adc_bits: int = ADC_BITS, adc_output_word_bits: int = MAX11632_OUTPUT_WORD_BITS) -> None:
         self.adc_bits = adc_bits
+        self.adc_output_word_bits = adc_output_word_bits
         self.counts = {
             "Address": {"perFrame": 0, "unit": "bit", "detail": "MCU wrote A1-A4 row address bits"},
-            "SCK": {"perFrame": 0, "unit": "pulse", "detail": "MCU generated clocks for command and FIFO read"},
-            "MOSI": {"perFrame": 0, "unit": "bit", "detail": "MCU transmitted ADC scan commands"},
-            "MISO": {"perFrame": 0, "unit": "bit", "detail": "MCU received ADC FIFO words"},
+            "SCK": {"perFrame": 0, "unit": "pulse", "detail": "MCU generated clocks for MAX11632 command and FIFO read"},
+            "MOSI": {"perFrame": 0, "unit": "bit", "detail": "MCU transmitted MAX11632 conversion-register commands"},
+            "MISO": {"perFrame": 0, "unit": "bit", "detail": "MCU received MAX11632 16-bit FIFO words"},
             "CS": {"perFrame": 0, "unit": "assertion", "edgesPerFrame": 0, "detail": "MCU asserted ADC chip select"},
         }
         self.events: list[dict[str, int | str]] = []
 
     def record_row(self, row: int, address_bits: list[int], command: dict, fifo_words: list[int]) -> None:
         mosi_bits = len(command["binary"])
-        miso_bits = len(fifo_words) * self.adc_bits
+        miso_bits = len(fifo_words) * self.adc_output_word_bits
         sck_pulses = mosi_bits + miso_bits
         self.counts["Address"]["perFrame"] += len(address_bits)
         self.counts["MOSI"]["perFrame"] += mosi_bits
@@ -297,7 +300,22 @@ class ADC:
         clamped = max(0.0, min(self.vref, voltage))
         return round((clamped / self.vref) * self.max_code)
 
-    def scan_command(self, start_channel: int = 0, scan_mode: int = 0b11, x_bit: int = 0) -> dict:
+    def setup_command(self, clock_mode: int = 0b10, reference_mode: int = 0b10) -> dict:
+        clock = max(0, min(0b11, clock_mode))
+        reference = max(0, min(0b11, reference_mode))
+        value = 0b01000000 | (clock << 4) | (reference << 2)
+        return {
+            "register": "setup",
+            "value": value,
+            "binary": format(value, "08b"),
+            "hex": f"0x{value:02X}",
+            "format": "0 1 CKSEL1 CKSEL0 REFSEL1 REFSEL0 X X",
+            "clockMode": clock,
+            "referenceMode": reference,
+            "label": "clock mode 10, internal reference always on" if clock == 0b10 and reference == 0b10 else "custom setup",
+        }
+
+    def scan_command(self, start_channel: int = 15, scan_mode: int = 0b00, x_bit: int = 0) -> dict:
         channel = max(0, min(self.channels - 1, start_channel))
         mode = max(0, min(0b11, scan_mode))
         value = 0b10000000 | (channel << 3) | (mode << 1) | (1 if x_bit else 0)
@@ -317,10 +335,20 @@ class ADC:
             "hex": f"0x{value:02X}",
             "startChannel": channel,
             "scanMode": mode,
-            "scanModeLabel": "AIN0-AIN15 sequence" if channel == 0 and mode == 0b11 else "channel sequence",
+            "scanModeLabel": self.scan_mode_label(channel, mode),
             "bits": bits,
             "format": "bit7 CH3 CH2 CH1 CH0 SC1 SC0 X",
+            "register": "conversion",
         }
+
+    def scan_mode_label(self, channel: int, mode: int) -> str:
+        if mode == 0b00:
+            return f"scan AIN0-AIN{channel}"
+        if mode == 0b01:
+            return f"scan AIN{channel}-AIN{self.channels - 1}"
+        if mode == 0b10:
+            return f"scan AIN{channel} repeatedly"
+        return f"single conversion AIN{channel}"
 
     def sar_convert(self, channel: int, voltage: float) -> dict[str, int | float | str]:
         return {
@@ -328,6 +356,7 @@ class ADC:
             "ain": f"AIN{channel - 1}",
             "voltage": voltage,
             "code": self.encode(voltage),
+            "outputWordBits": MAX11632_OUTPUT_WORD_BITS,
             "stage": "sample -> SAR convert -> FIFO",
         }
 
@@ -361,15 +390,15 @@ class SPIBus:
         self.lines = {
             "SCK": {
                 "direction": "MCU -> ADC",
-                "carries": "serial clock pulses for each ADC data bit",
+                "carries": "serial clock pulses for MAX11632 command and FIFO readout",
             },
             "MOSI": {
                 "direction": "MCU -> ADC",
-                "carries": "read command and channel-frame control",
+                "carries": "MAX11632 setup/conversion register bytes",
             },
             "MISO": {
                 "direction": "ADC -> MCU",
-                "carries": "16 sequential 12-bit ADC conversion words",
+                "carries": "16 sequential 16-bit FIFO words, each 0000 + 12-bit code",
             },
             "CS": {
                 "direction": "MCU -> ADC",
@@ -382,9 +411,9 @@ class SPIBus:
         line_state = {
             "SCK": {
                 "active": True,
-                "amount": 8 + len(words) * ADC_BITS,
+                "amount": 8 + len(words) * MAX11632_OUTPUT_WORD_BITS,
                 "unit": "pulse",
-                "label": f"{8 + len(words) * ADC_BITS} pulses",
+                "label": f"{8 + len(words) * MAX11632_OUTPUT_WORD_BITS} pulses",
             },
             "MOSI": {
                 "active": True,
@@ -394,9 +423,9 @@ class SPIBus:
             },
             "MISO": {
                 "active": len(words) > 0,
-                "amount": len(words) * ADC_BITS,
+                "amount": len(words) * MAX11632_OUTPUT_WORD_BITS,
                 "unit": "bit",
-                "label": f"{len(words)} x {ADC_BITS}-bit",
+                "label": f"{len(words)} x {MAX11632_OUTPUT_WORD_BITS}-bit",
             },
             "CS": {
                 "active": True,
@@ -406,7 +435,7 @@ class SPIBus:
             },
         }
         return {
-            "summary": f"row {row}, ADC scan command then 16 FIFO words",
+            "summary": f"row {row}, MAX11632 conversion command then 16 FIFO words",
             "command": command,
             "words": words,
             "clock": clock_state,
@@ -418,7 +447,7 @@ class SPIBus:
                     "mosi": command["binary"],
                     "miso": "idle",
                     "activeLines": ["CS", "MOSI", "SCK"],
-                    "description": "MCU selects ADC, sends the 8-bit scan command, then releases CS.",
+                    "description": "MCU selects MAX11632, sends the 8-bit conversion-register command, then releases CS.",
                 },
                 {
                     "phase": "conversion",
@@ -430,9 +459,9 @@ class SPIBus:
                 {
                     "phase": "read_fifo",
                     "cs": "LOW -> HIGH",
-                    "sckPulses": len(words) * ADC_BITS,
+                    "sckPulses": len(words) * MAX11632_OUTPUT_WORD_BITS,
                     "mosi": "dummy clocks / no payload",
-                    "miso": "16 sequential 12-bit ADC words from FIFO",
+                    "miso": "16 sequential 16-bit words from FIFO; each word is 0000 + 12-bit ADC code",
                     "activeLines": ["CS", "MISO", "SCK"],
                     "description": "After EOC is low, MCU selects ADC again and clocks FIFO data out on MISO.",
                 },

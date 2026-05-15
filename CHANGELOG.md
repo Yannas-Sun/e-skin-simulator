@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-05-15 - MAX11632 SPI Protocol Alignment
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Updated the ADC simulation to match the MAX11632 command and result format.
+   - The internal ADC scan command is now `0xF8`, meaning conversion register `1 1111 00 0` for AIN0-AIN15 scan.
+   - MAX11632 FIFO readout is now counted as 16-bit words per channel, with four leading zeros plus the 12-bit ADC code.
+   - Internal ADC SPI throughput now includes 256 MISO bits per row instead of only the 192 valid ADC bits.
+
+2. **[Docs]** Added protocol notes on the dashboard.
+   - The homepage now documents the FPGA-to-STM32G474 custom command frame.
+   - It also documents the MAX11632 setup byte, conversion byte, single-channel command template, full AIN0-AIN15 command, and ADC result format.
+
+3. **[Appearance]** Updated FSR demo readout text.
+   - The SPI transfer panel now displays MAX11632 setup and conversion bytes.
+   - The readout logic describes the 16-bit FIFO word format.
+
 ## 2026-05-15 - Module MCU Uplink SPI Model
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
@@ -182,7 +199,7 @@ Changes are ordered from most important to least important. Each change is label
 
 2. **[Logic]** Added the ADC MOSI command bit layout.
    - The scan command now follows `bit7 CH3 CH2 CH1 CH0 SC1 SC0 X`.
-   - A full AIN0-AIN15 scan is represented as `10000110` with `CH=0000`, `SC=11`, and `X=0`.
+   - This earlier abstract command was later replaced by the MAX11632-specific `0xF8` AIN0-AIN15 scan command.
 
 3. **[Feature]** Exposed ADC transaction details in the API response.
    - Responses now include FIFO depth, EOC state, scan conversions, and SPI command/read transactions.

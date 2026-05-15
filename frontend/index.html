@@ -60,6 +60,25 @@
           </div>
           <p id="linkNote" class="note">Each module follows the report model: 560 channels at 700 Hz with frame metadata.</p>
         </div>
+
+        <div class="panel-section protocol-card">
+          <div class="section-title">
+            <h2>Protocol Notes</h2>
+            <span>initial mode</span>
+          </div>
+          <dl class="protocol-list">
+            <dt>FPGA -> STM32G474</dt>
+            <dd>Custom SPI command frame: opcode, module ID, scan mode, frame counter, CRC.</dd>
+            <dt>STM32G474 -> MAX11632</dt>
+            <dd>MAX11632 setup byte: <code>0 1 CKSEL1 CKSEL0 REFSEL1 REFSEL0 X X</code>.</dd>
+            <dd>MAX11632 conversion byte: <code>1 CHSEL3 CHSEL2 CHSEL1 CHSEL0 SCAN1 SCAN0 X</code>.</dd>
+            <dd>Single-channel command template: <code>0x80 | (channel &lt;&lt; 3) | (scan &lt;&lt; 1)</code>.</dd>
+            <dt>AIN0-AIN15 scan</dt>
+            <dd><code>0xF8 = 1 1111 00 0</code>, scan channels 0 through 15.</dd>
+            <dt>ADC result</dt>
+            <dd>Each channel returns <code>0000 + 12-bit code</code> as one 16-bit SPI word.</dd>
+          </dl>
+        </div>
       </section>
 
       <section class="workspace-panel">

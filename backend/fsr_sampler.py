@@ -42,8 +42,9 @@ class FSRReadoutProgram:
             object_mass=object_mass,
         )
 
-        # ADC phase: MCU commands a scan, then the ADC converts AIN0-AIN15 into its FIFO.
-        scan_command = self.adc.scan_command(start_channel=0, scan_mode=0b11, x_bit=0)
+        # ADC phase: MCU commands MAX11632 to scan AIN0-AIN15 into its FIFO.
+        setup_command = self.adc.setup_command(clock_mode=0b10, reference_mode=0b10)
+        scan_command = self.adc.scan_command(start_channel=15, scan_mode=0b00, x_bit=0)
         adc_scan = self.adc.start_scan([node["nodeVoltage"] for node in column_nodes], command=scan_command)
         adc_samples = self.adc.read_fifo()
 
@@ -106,6 +107,7 @@ class FSRReadoutProgram:
                 "fifoDepth": len(self.adc.fifo),
                 "eoc": self.adc.eoc,
                 "eocState": "LOW_CONVERSION_COMPLETE" if self.adc.eoc == 0 else "HIGH_BUSY",
+                "setupCommand": setup_command,
                 "scan": adc_scan,
             },
             "spi": spi_frame,
@@ -127,7 +129,7 @@ class FSRReadoutProgram:
                 object_size=object_size,
                 object_mass=object_mass,
             )
-            scan_command = self.adc.scan_command(start_channel=0, scan_mode=0b11, x_bit=0)
+            scan_command = self.adc.scan_command(start_channel=15, scan_mode=0b00, x_bit=0)
             self.adc.start_scan([node["nodeVoltage"] for node in nodes], command=scan_command)
             words = [sample["code"] for sample in self.adc.read_fifo()]
             active_word = words[pressed_col - 1]
@@ -160,7 +162,7 @@ class FSRReadoutProgram:
                 object_size=object_size,
                 object_mass=object_mass,
             )
-            command = self.adc.scan_command(start_channel=0, scan_mode=0b11, x_bit=0)
+            command = self.adc.scan_command(start_channel=15, scan_mode=0b00, x_bit=0)
             self.adc.start_scan([node["nodeVoltage"] for node in nodes], command=command)
             words = [sample["code"] for sample in self.adc.read_fifo()]
             counter.record_row(
