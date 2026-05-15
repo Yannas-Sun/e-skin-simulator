@@ -74,9 +74,9 @@ function path(parent, d, className = "wire") {
 
 function resistor(parent, x, y, vertical = true, className = "component-line") {
   const points = [];
-  const step = 7;
+  const step = 5;
   for (let i = 0; i <= 8; i += 1) {
-    const offset = i % 2 === 0 ? -7 : 7;
+    const offset = i % 2 === 0 ? -5 : 5;
     if (vertical) points.push(`${x + offset},${y + i * step}`);
     else points.push(`${x + i * step},${y + offset}`);
   }
@@ -294,7 +294,7 @@ function drawArray(root, columns) {
     line(root, cx, nodeY, cx, layout.adcY, col === demo.col ? "wire active-wire" : "wire sample-wire");
     line(root, cx, nodeY, resistorX, nodeY, col === demo.col ? "wire active-wire" : "wire");
     resistor(root, resistorX, nodeY, true, col === demo.col ? "component-line active-component" : "component-line");
-    line(root, resistorX, bottomY, resistorX, bottomY + 1, col === demo.col ? "active-component" : "component-line");
+    line(root, resistorX, nodeY + 40, resistorX, bottomY, col === demo.col ? "active-component" : "component-line");
     drawGround(root, resistorX, bottomY);
   }
 }
