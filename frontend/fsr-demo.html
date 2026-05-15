@@ -39,8 +39,8 @@
           </label>
           <label>
             <span>Refresh rate</span>
-            <input id="refreshRateRange" type="range" min="1" max="700" value="10" />
-            <output id="refreshRateValue">10 Hz</output>
+            <input id="refreshRateRange" type="range" min="1" max="700" value="5" />
+            <output id="refreshRateValue">5 Hz</output>
           </label>
           <p id="refreshRateNote" class="control-note"></p>
           <button id="autoScan" class="text-button" type="button">Auto Scan</button>
@@ -50,6 +50,7 @@
           </label>
           <button id="runMosi" class="text-button" type="button">Run MOSI</button>
           <p id="mosiStatus" class="control-note">Enter bytes such as 0x68, 0x20, 0xF8 or 11111000.</p>
+          <pre id="misoOutput" class="spi-frame miso-output">MISO output appears here after Run MOSI.</pre>
         </aside>
 
         <section class="circuit-panel">

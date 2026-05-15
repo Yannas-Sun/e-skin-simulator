@@ -4,7 +4,7 @@ const demo = {
   col: 8,
   objectSize: 72,
   objectMass: 620,
-  refreshRate: 10,
+  refreshRate: 5,
   auto: false,
   timer: null,
   fifoTimer: null,
@@ -37,6 +37,7 @@ const adcInputTable = document.getElementById("adcInputTable");
 const manualMosi = document.getElementById("manualMosi");
 const runMosi = document.getElementById("runMosi");
 const mosiStatus = document.getElementById("mosiStatus");
+const misoOutput = document.getElementById("misoOutput");
 
 const layout = {
   dmuxX: 70,
@@ -147,7 +148,7 @@ async function requestHardwareState() {
     }),
   });
   demo.hardware = await response.json();
-  startFifoPlayback(demo.hardware);
+  showScanResult(demo.hardware);
 }
 
 async function requestManualMosi() {
@@ -194,7 +195,7 @@ function drawCircuit() {
   refreshRateValue.textContent = `${demo.refreshRate} Hz`;
   refreshRateNote.textContent = refreshRateExplanation();
   scanState.textContent = demo.auto ? "auto scan" : "manual";
-  svgEl.classList.toggle("no-animation", demo.refreshRate > 10);
+  svgEl.classList.toggle("no-animation", demo.refreshRate > 100);
   renderAdcInputTable();
   const rates = demo.hardware.mcu.lineRates;
   const uplink = demo.hardware.moduleUplink;
@@ -230,9 +231,6 @@ function drawCircuit() {
     `MISO          ${uplinkRates.MISO.perFrame.toFixed(0).padStart(5)} bit       ${formatRate(uplinkRates.MISO.perSecond, uplinkRates.MISO.unit)}`,
     `CS            ${uplinkRates.CS.perFrame.toFixed(0).padStart(5)} assert    ${formatRate(uplinkRates.CS.perSecond, uplinkRates.CS.unit)}`,
   ];
-  if (demo.mosiResult) {
-    spiLines.push("", ...manualMosiLines(demo.mosiResult));
-  }
   spiFrame.textContent = spiLines.join("\n");
 }
 
@@ -370,7 +368,7 @@ function drawArray(root, columns) {
   for (let col = 1; col <= 16; col += 1) {
     const cx = colX(col);
     const nodeY = layout.adcY - 118;
-    const resistorX = cx + 14;
+    const resistorX = cx + 22;
     const bottomY = nodeY + 56;
     const fifoActive = col === fifoCol;
     root.appendChild(svg("circle", { cx, cy: nodeY, r: 4, class: fifoActive ? "sample-node active-node" : "sample-node" }));
@@ -443,9 +441,13 @@ function drawHardwareHeatmap(root) {
 }
 
 function refreshRateExplanation() {
-  const displayedFrameRate = demo.refreshRate / 16;
-  const actualFrameRate = demo.refreshRate;
-  return `Visual row stepping is illustrative: displayed full-frame rate ${displayedFrameRate.toFixed(2)} Hz vs actual hardware setting ${actualFrameRate} Hz, ratio 1:16. Right-side transfer rates use the actual hardware setting.`;
+  if (demo.refreshRate > 100) {
+    return `>100 Hz: animation is disabled and the heatmap is written directly from scanned ADC/FIFO data. Transfer rates still use ${demo.refreshRate} full 16x16 frame/s.`;
+  }
+  if (demo.refreshRate > 5) {
+    return `>5 Hz: vertical FIFO playback is hidden; only row scanning is visualized. Heatmap values still come from scanned MISO/FIFO data.`;
+  }
+  return `<=5 Hz: FIFO readout is visualized column by column. Manual MOSI playback is also shown at 5 Hz.`;
 }
 
 function drawPressureObject(root) {
@@ -481,17 +483,54 @@ function heatmapIntensity(code) {
   return Math.max(0, Math.min(1, signal / 1800));
 }
 
+function showScanResult(hardware, forceFifo = false) {
+  const mode = forceFifo ? "fifo" : scanVisualizationMode();
+  if (mode === "fifo") {
+    startFifoPlayback(hardware);
+    return;
+  }
+  stopFifoPlayback();
+  applyScannedRow(hardware);
+  demo.fifoPlayback = {
+    active: false,
+    row: hardware.row,
+    col: null,
+    words: hardware.spi?.words?.slice(0, 16) || [],
+    mode,
+  };
+  drawCircuit();
+}
+
+function scanVisualizationMode() {
+  if (demo.refreshRate > 100) return "direct";
+  if (demo.refreshRate > 5) return "row";
+  return "fifo";
+}
+
+function applyScannedRow(hardware) {
+  const rowIndex = hardware.row - 1;
+  const words = hardware.spi?.words || [];
+  if (rowIndex < 0 || rowIndex >= 16 || words.length !== 16) return;
+  demo.receivedCodes[rowIndex] = words.slice(0, 16);
+}
+
+function stopFifoPlayback() {
+  if (demo.fifoTimer) window.clearInterval(demo.fifoTimer);
+  demo.fifoTimer = null;
+  if (demo.fifoPlayback) demo.fifoPlayback.active = false;
+}
+
 function startFifoPlayback(hardware) {
   const rowIndex = hardware.row - 1;
   const words = hardware.spi?.words || [];
   if (rowIndex < 0 || rowIndex >= 16 || words.length !== 16) return;
-  if (demo.fifoTimer) window.clearInterval(demo.fifoTimer);
-  demo.fifoTimer = null;
+  stopFifoPlayback();
   demo.fifoPlayback = {
     active: true,
     row: hardware.row,
     col: 1,
     words: words.slice(0, 16),
+    mode: "fifo",
   };
   applyFifoWord();
   const interval = fifoPlaybackInterval();
@@ -523,7 +562,7 @@ function applyFifoWord() {
 }
 
 function fifoCursorCol() {
-  if (!demo.fifoPlayback?.active || demo.fifoPlayback.row !== demo.row) return null;
+  if (!demo.fifoPlayback?.active || demo.fifoPlayback.mode !== "fifo" || demo.fifoPlayback.row !== demo.row) return null;
   return demo.fifoPlayback.col;
 }
 
@@ -558,7 +597,7 @@ function placeObjectFromPoint(point) {
   if (row === demo.objectRow && col === demo.col) return;
   demo.objectRow = row;
   demo.col = col;
-  updateDemo();
+  drawCircuit();
 }
 
 function beginObjectPlacement(event) {
@@ -585,36 +624,63 @@ async function updateDemo() {
   }
   demo.updateInFlight = true;
   await requestHardwareState();
-  drawCircuit();
   demo.updateInFlight = false;
   if (demo.pendingUpdate) {
     demo.pendingUpdate = false;
     updateDemo();
+    return;
   }
+  scheduleNextAutoRow();
 }
 
 function syncFromControls() {
   demo.objectSize = Number(objectSizeRange.value);
   demo.objectMass = Number(objectMassRange.value);
   demo.refreshRate = Number(refreshRateRange.value);
-  updateDemo();
+  drawCircuit();
   restartAutoScanTimer();
 }
 
 async function runManualMosi() {
+  demo.auto = false;
+  document.getElementById("autoScan").classList.remove("active");
+  restartAutoScanTimer();
+  demo.refreshRate = 5;
+  refreshRateRange.value = "5";
+  refreshRateValue.textContent = "5 Hz";
   runMosi.disabled = true;
   mosiStatus.textContent = "running MOSI bytes through virtual MAX11632...";
   try {
     demo.mosiResult = await requestManualMosi();
     mosiStatus.textContent = `done: ${demo.mosiResult.misoWords.length} MISO word(s)`;
-    drawCircuit();
+    misoOutput.textContent = manualMosiLines(demo.mosiResult).join("\n");
+    playManualMisoResult(demo.mosiResult);
   } catch (error) {
     demo.mosiResult = null;
+    misoOutput.textContent = "MISO output unavailable.";
     mosiStatus.textContent = error.message;
     drawCircuit();
   } finally {
     runMosi.disabled = false;
   }
+}
+
+function playManualMisoResult(result) {
+  if (!result.misoWords.length || !demo.hardware) {
+    drawCircuit();
+    return;
+  }
+  const words = result.misoWords.slice(-16).map((word) => word.value);
+  const hardware = {
+    ...demo.hardware,
+    row: result.row,
+    spi: {
+      ...demo.hardware.spi,
+      words,
+    },
+  };
+  demo.row = result.row;
+  showScanResult(hardware, true);
 }
 
 function stepRow() {
@@ -644,7 +710,13 @@ function scheduleNextAutoRow() {
   if (!demo.auto || demo.fifoPlayback?.active || demo.updateInFlight) {
     return;
   }
-  demo.timer = window.setTimeout(stepRow, fifoPlaybackInterval());
+  demo.timer = window.setTimeout(stepRow, autoScanDelay());
+}
+
+function autoScanDelay() {
+  if (demo.refreshRate > 100) return Math.max(10, 1000 / demo.refreshRate);
+  if (demo.refreshRate > 5) return Math.max(18, 1000 / demo.refreshRate);
+  return fifoPlaybackInterval();
 }
 
 objectSizeRange.addEventListener("input", syncFromControls);

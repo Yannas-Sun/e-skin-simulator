@@ -678,7 +678,7 @@ h2 {
 
 .demo-grid {
   display: grid;
-  grid-template-columns: 260px minmax(720px, 1fr) 620px;
+  grid-template-columns: 260px minmax(720px, 1fr) 660px;
   gap: 14px;
   min-height: 0;
 }
@@ -719,6 +719,11 @@ h2 {
 .mosi-input:focus {
   outline: 2px solid rgba(30, 138, 165, 0.22);
   border-color: var(--teal);
+}
+
+.miso-output {
+  max-height: 230px;
+  margin: 0;
 }
 
 .demo-controls output {

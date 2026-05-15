@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-05-15 - Frequency-Aware Scan Visualization
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Decoupled object movement from active scan playback.
+   - Moving the pressure object no longer restarts the current FIFO cursor at C1.
+   - The next hardware scan samples the latest object position, so heatmap updates still come only from scanned ADC/FIFO data.
+
+2. **[Logic]** Added refresh-rate-dependent visualization modes.
+   - At 5 Hz or below, the demo shows full FIFO column playback.
+   - Above 5 Hz, the demo hides vertical FIFO playback and only shows row scanning.
+   - Above 100 Hz, the demo disables scan animation and writes heatmap rows directly from scanned data.
+
+3. **[Interaction]** Manual MOSI playback now forces a 5 Hz animated display.
+   - Running user-entered MOSI bytes stops Auto Scan, sets the visual refresh control to 5 Hz, and shows the FIFO animation.
+   - Manual MISO output moved from the right readout panel into the left control panel.
+
+4. **[Appearance]** Updated the FSR demo layout.
+   - Default refresh rate is now 5 Hz.
+   - The right data panel is wider.
+   - Column load-resistor symbols were moved slightly right for clearer spacing.
+
 ## 2026-05-15 - FIFO Playback Scheduling Fix
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
