@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-05-15 - MAX11632 Input Byte Table
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Added the MAX11632 input data byte table to the hardware ADC model.
+   - The simulated ADC now exposes Conversion, Setup, Averaging, and Reset register byte formats from the datasheet.
+   - Added builders and decoders for setup, conversion, averaging, and active-low reset input bytes.
+   - Normal scan output now reports the setup byte, averaging-disabled byte, reset-not-asserted byte, and AIN0-AIN15 conversion byte from the same backend model.
+
+2. **[Appearance]** Added a MAX11632 input-byte table to the FSR demo page.
+   - The right-side panel now displays the MSB-first bit layout for all four ADC command/register byte types.
+   - The SPI transfer panel now includes the averaging and reset-state bytes alongside setup and conversion.
+
+3. **[Docs]** Added the new ADC datasheet to the repository and expanded dashboard protocol notes.
+   - The homepage now lists the Averaging and Reset byte formats in addition to Setup and Conversion.
+
 ## 2026-05-15 - MAX11632 SPI Protocol Alignment
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

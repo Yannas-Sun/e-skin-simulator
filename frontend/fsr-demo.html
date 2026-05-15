@@ -81,6 +81,29 @@
             <pre id="spiFrame" class="spi-frame"></pre>
           </div>
 
+          <div class="panel-section protocol-card">
+            <div class="section-title">
+              <h2>MAX11632 Input Byte</h2>
+              <span>MSB first</span>
+            </div>
+            <table class="protocol-table" aria-label="MAX11632 input data byte table">
+              <thead>
+                <tr>
+                  <th>Register</th>
+                  <th>B7</th>
+                  <th>B6</th>
+                  <th>B5</th>
+                  <th>B4</th>
+                  <th>B3</th>
+                  <th>B2</th>
+                  <th>B1</th>
+                  <th>B0</th>
+                </tr>
+              </thead>
+              <tbody id="adcInputTable"></tbody>
+            </table>
+          </div>
+
           <div class="panel-section module-info">
             <div class="section-title">
               <h2>Readout Logic</h2>
@@ -91,7 +114,7 @@
               <li>DMUX drives one row electrode with Vcc.</li>
               <li>Each column is pulled to ground through 10 kOhm.</li>
               <li>Pressed FSR cells reduce resistance and raise column voltage.</li>
-              <li>STM32G474 sends MAX11632 conversion command 0xF8, waits for EOC low, then clocks FIFO values out on MISO.</li>
+              <li>STM32G474 uses MAX11632 input bytes for setup, optional averaging/reset control, and the 0xF8 AIN0-AIN15 conversion command.</li>
               <li>Each MAX11632 FIFO result is a 16-bit word: four leading zeros plus the 12-bit ADC code.</li>
               <li>After a full 16x16 frame, STM32G474 returns raw frame data to the upper FPGA/Hub over SPI.</li>
               <li>No event-driven encoding or learned encoder is applied in this initial mode.</li>

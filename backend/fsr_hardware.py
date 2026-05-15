@@ -10,6 +10,28 @@ MAX11632_OUTPUT_WORD_BITS = 16
 MODULE_FRAME_METADATA_BYTES = 20
 MODULE_UPLINK_COMMAND_BITS = 32
 MODULE_UPLINK_WORD_BITS = 16
+MAX11632_INPUT_DATA_BYTE_TABLE = [
+    {
+        "register": "Conversion",
+        "bits": ["1", "CHSEL3", "CHSEL2", "CHSEL1", "CHSEL0", "SCAN1", "SCAN0", "X"],
+        "description": "Selects the conversion channel and scan mode.",
+    },
+    {
+        "register": "Setup",
+        "bits": ["0", "1", "CKSEL1", "CKSEL0", "REFSEL1", "REFSEL0", "X", "X"],
+        "description": "Configures ADC clock source and reference behavior.",
+    },
+    {
+        "register": "Averaging",
+        "bits": ["0", "0", "1", "AVGON", "NAVG1", "NAVG0", "NSCAN1", "NSCAN0"],
+        "description": "Configures internal averaging and repeated scan count.",
+    },
+    {
+        "register": "Reset",
+        "bits": ["0", "0", "0", "1", "RESET_N", "X", "X", "X"],
+        "description": "Controls the active-low reset bit.",
+    },
+]
 
 
 @dataclass
@@ -296,23 +318,120 @@ class ADC:
         self.fifo: list[dict[str, int | float | str]] = []
         self.eoc = 1
 
+    def input_data_byte_table(self) -> list[dict]:
+        return [
+            {
+                "register": row["register"],
+                "bits": row["bits"].copy(),
+                "description": row["description"],
+            }
+            for row in MAX11632_INPUT_DATA_BYTE_TABLE
+        ]
+
     def encode(self, voltage: float) -> int:
         clamped = max(0.0, min(self.vref, voltage))
         return round((clamped / self.vref) * self.max_code)
+
+    def describe_input_byte(self, value: int) -> dict:
+        byte = value & 0xFF
+        if byte & 0b10000000:
+            register = "conversion"
+            table_row = "Conversion"
+            fields = {
+                "CHSEL": (byte >> 3) & 0b1111,
+                "SCAN": (byte >> 1) & 0b11,
+                "X": byte & 1,
+            }
+        elif byte & 0b01000000:
+            register = "setup"
+            table_row = "Setup"
+            fields = {
+                "CKSEL": (byte >> 4) & 0b11,
+                "REFSEL": (byte >> 2) & 0b11,
+                "X1": (byte >> 1) & 1,
+                "X0": byte & 1,
+            }
+        elif byte & 0b00100000:
+            register = "averaging"
+            table_row = "Averaging"
+            fields = {
+                "AVGON": (byte >> 4) & 1,
+                "NAVG": (byte >> 2) & 0b11,
+                "NSCAN": byte & 0b11,
+            }
+        elif byte & 0b00010000:
+            register = "reset"
+            table_row = "Reset"
+            fields = {
+                "RESET_N": (byte >> 3) & 1,
+                "X2": (byte >> 2) & 1,
+                "X1": (byte >> 1) & 1,
+                "X0": byte & 1,
+            }
+        else:
+            register = "reserved"
+            table_row = "Reserved"
+            fields = {}
+        return {
+            "register": register,
+            "tableRow": table_row,
+            "value": byte,
+            "binary": format(byte, "08b"),
+            "hex": f"0x{byte:02X}",
+            "fields": fields,
+        }
 
     def setup_command(self, clock_mode: int = 0b10, reference_mode: int = 0b10) -> dict:
         clock = max(0, min(0b11, clock_mode))
         reference = max(0, min(0b11, reference_mode))
         value = 0b01000000 | (clock << 4) | (reference << 2)
+        decoded = self.describe_input_byte(value)
         return {
             "register": "setup",
             "value": value,
             "binary": format(value, "08b"),
             "hex": f"0x{value:02X}",
             "format": "0 1 CKSEL1 CKSEL0 REFSEL1 REFSEL0 X X",
+            "tableRow": decoded["tableRow"],
+            "fields": decoded["fields"],
             "clockMode": clock,
             "referenceMode": reference,
             "label": "clock mode 10, internal reference always on" if clock == 0b10 and reference == 0b10 else "custom setup",
+        }
+
+    def averaging_command(self, avg_on: bool = False, navg: int = 0, nscan: int = 0) -> dict:
+        navg_value = max(0, min(0b11, navg))
+        nscan_value = max(0, min(0b11, nscan))
+        value = 0b00100000 | ((1 if avg_on else 0) << 4) | (navg_value << 2) | nscan_value
+        decoded = self.describe_input_byte(value)
+        return {
+            "register": "averaging",
+            "value": value,
+            "binary": format(value, "08b"),
+            "hex": f"0x{value:02X}",
+            "format": "0 0 1 AVGON NAVG1 NAVG0 NSCAN1 NSCAN0",
+            "tableRow": decoded["tableRow"],
+            "fields": decoded["fields"],
+            "avgOn": avg_on,
+            "navg": navg_value,
+            "nscan": nscan_value,
+            "label": "averaging disabled" if not avg_on else "averaging enabled",
+        }
+
+    def reset_command(self, reset_n: int = 1) -> dict:
+        reset_bit = 1 if reset_n else 0
+        value = 0b00010000 | (reset_bit << 3)
+        decoded = self.describe_input_byte(value)
+        return {
+            "register": "reset",
+            "value": value,
+            "binary": format(value, "08b"),
+            "hex": f"0x{value:02X}",
+            "format": "0 0 0 1 RESET_N X X X",
+            "tableRow": decoded["tableRow"],
+            "fields": decoded["fields"],
+            "resetN": reset_bit,
+            "label": "normal operation, reset not asserted" if reset_bit else "active-low reset asserted",
         }
 
     def scan_command(self, start_channel: int = 15, scan_mode: int = 0b00, x_bit: int = 0) -> dict:
@@ -329,6 +448,7 @@ class ADC:
             "SC0": mode & 1,
             "X": 1 if x_bit else 0,
         }
+        decoded = self.describe_input_byte(value)
         return {
             "value": value,
             "binary": format(value, "08b"),
@@ -338,6 +458,8 @@ class ADC:
             "scanModeLabel": self.scan_mode_label(channel, mode),
             "bits": bits,
             "format": "bit7 CH3 CH2 CH1 CH0 SC1 SC0 X",
+            "tableRow": decoded["tableRow"],
+            "fields": decoded["fields"],
             "register": "conversion",
         }
 

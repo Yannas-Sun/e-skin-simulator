@@ -44,6 +44,8 @@ class FSRReadoutProgram:
 
         # ADC phase: MCU commands MAX11632 to scan AIN0-AIN15 into its FIFO.
         setup_command = self.adc.setup_command(clock_mode=0b10, reference_mode=0b10)
+        averaging_command = self.adc.averaging_command(avg_on=False, navg=0, nscan=0)
+        reset_command = self.adc.reset_command(reset_n=1)
         scan_command = self.adc.scan_command(start_channel=15, scan_mode=0b00, x_bit=0)
         adc_scan = self.adc.start_scan([node["nodeVoltage"] for node in column_nodes], command=scan_command)
         adc_samples = self.adc.read_fifo()
@@ -107,7 +109,10 @@ class FSRReadoutProgram:
                 "fifoDepth": len(self.adc.fifo),
                 "eoc": self.adc.eoc,
                 "eocState": "LOW_CONVERSION_COMPLETE" if self.adc.eoc == 0 else "HIGH_BUSY",
+                "inputDataByteTable": self.adc.input_data_byte_table(),
                 "setupCommand": setup_command,
+                "averagingCommand": averaging_command,
+                "resetCommand": reset_command,
                 "scan": adc_scan,
             },
             "spi": spi_frame,
@@ -140,9 +145,9 @@ class FSRReadoutProgram:
                     "address": "".join(str(bit) for bit in reversed(self.dmux.address_bits)),
                     "adcInput": f"C1-C16, C{pressed_col}={nodes[pressed_col - 1]['nodeVoltage']:.2f}V",
                     "mosi": scan_command["binary"],
-                    "miso": format(active_word, "012b"),
+                    "miso": format(active_word, "016b"),
                     "mosiLabel": f"{scan_command['hex']} scan AIN0-AIN15",
-                    "misoLabel": f"C{pressed_col} code {active_word}",
+                    "misoLabel": f"C{pressed_col} word 0000 + code {active_word}",
                     "eoc": 0,
                     "spiOut": f"MISO[{pressed_col}]={active_word}",
                 }

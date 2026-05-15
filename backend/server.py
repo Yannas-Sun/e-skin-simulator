@@ -198,7 +198,10 @@ class Handler(SimpleHTTPRequestHandler):
 
 def main() -> None:
     server = ThreadingHTTPServer(("127.0.0.1", 8000), Handler)
-    print("e-skin simulator running at http://127.0.0.1:8000")
+    try:
+        print("e-skin simulator running at http://127.0.0.1:8000")
+    except (AttributeError, OSError):
+        pass
     server.serve_forever()
 
 

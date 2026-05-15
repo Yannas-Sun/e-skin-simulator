@@ -28,6 +28,7 @@ const fsrResistance = document.getElementById("fsrResistance");
 const adcVoltage = document.getElementById("adcVoltage");
 const adcCode = document.getElementById("adcCode");
 const spiFrame = document.getElementById("spiFrame");
+const adcInputTable = document.getElementById("adcInputTable");
 
 const layout = {
   dmuxX: 70,
@@ -167,6 +168,7 @@ function drawCircuit() {
   refreshRateNote.textContent = refreshRateExplanation();
   scanState.textContent = demo.auto ? "auto scan" : "manual";
   svgEl.classList.toggle("no-animation", demo.refreshRate > 10);
+  renderAdcInputTable();
   const rates = demo.hardware.mcu.lineRates;
   const uplink = demo.hardware.moduleUplink;
   const uplinkRates = uplink.lineRates;
@@ -184,6 +186,8 @@ function drawCircuit() {
     `CS edges      ${rates.CS.edgesPerFrame.toFixed(0).padStart(5)} edge      ${rates.CS.edgesPerSecond.toFixed(0)} edge/s`,
     ``,
     `MAX11632 setup: ${demo.hardware.adc.setupCommand.hex} ${demo.hardware.adc.setupCommand.binary}`,
+    `MAX11632 averaging: ${demo.hardware.adc.averagingCommand.hex} ${demo.hardware.adc.averagingCommand.binary}`,
+    `MAX11632 reset state: ${demo.hardware.adc.resetCommand.hex} ${demo.hardware.adc.resetCommand.binary}`,
     `MAX11632 conversion: ${demo.hardware.spi.command.hex} ${demo.hardware.spi.command.binary}`,
     `FIFO output: 16 x 16-bit words, each 0000 + 12-bit ADC code`,
     ``,
@@ -199,6 +203,24 @@ function drawCircuit() {
     `MISO          ${uplinkRates.MISO.perFrame.toFixed(0).padStart(5)} bit       ${formatRate(uplinkRates.MISO.perSecond, uplinkRates.MISO.unit)}`,
     `CS            ${uplinkRates.CS.perFrame.toFixed(0).padStart(5)} assert    ${formatRate(uplinkRates.CS.perSecond, uplinkRates.CS.unit)}`,
   ].join("\n");
+}
+
+function renderAdcInputTable() {
+  if (!adcInputTable || !demo.hardware?.adc?.inputDataByteTable) return;
+  adcInputTable.innerHTML = "";
+  for (const row of demo.hardware.adc.inputDataByteTable) {
+    const tr = document.createElement("tr");
+    const register = document.createElement("th");
+    register.scope = "row";
+    register.textContent = row.register;
+    tr.appendChild(register);
+    for (const bit of row.bits) {
+      const td = document.createElement("td");
+      td.textContent = bit;
+      tr.appendChild(td);
+    }
+    adcInputTable.appendChild(tr);
+  }
 }
 
 function drawMcu(root) {
