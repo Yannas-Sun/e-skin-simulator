@@ -14,7 +14,13 @@ The simulated e-skin module follows the hardware structure described in the repo
 
 The simulator is intended as an early design and communication tool rather than a high-fidelity finite-element or electronics model.
 
+## Development Status
+
+This project is still under active development. The current repository captures the first programmable simulation workflow, hardware-readout demo, and visualization interface. New functions will continue to be added, including richer scan strategies, external MCU-in-the-loop testing, event-driven sensing experiments, encoder/VAE-style data compression, and more complete multi-patch communication models.
+
 ## Features
+
+### Module Network Dashboard
 
 - Drag hexagonal e-skin modules into a honeycomb grid
 - Assemble modules into arbitrary edge-aligned networks
@@ -30,8 +36,25 @@ The simulator is intended as an early design and communication tool rather than 
 - Display a live pressure heatmap matching the assembled module topology
 - Show module IDs on the heatmap
 - Estimate real-time data throughput and Ethernet link use
+
+### Programmable FSR Readout Demo
+
 - Open an FSR readout demo showing DMUX row selection, 16 x 16 FSR voltage-divider readout, 16-channel ADC sampling, and four-wire SPI transfer back to the MCU
 - Run the FSR demo from programmable Python virtual hardware classes rather than frontend-only formulas
+- Simulate a MAX11632-style ADC command flow, including setup, averaging, reset, conversion input bytes, FIFO readout, EOC behavior, and 16-bit MISO output words
+- Enter custom MOSI byte sequences from the web UI and inspect the resulting MISO FIFO output
+- Generate the FSR heatmap from scanned ADC/FIFO data rather than directly from object placement
+- Switch visualization behavior by refresh rate while keeping the same scan pipeline: MUX row scan followed by ADC FIFO column output
+- Use the simulator as a bridge toward physical MCU testing, where an external MCU can later drive or validate the same command and data-transfer logic
+
+## Demo Videos
+
+The repository includes two demo videos in [`demo/`](demo/) to document the current simulator behavior.
+
+- [`demo/demo1.mp4`](demo/demo1.mp4): Demonstrates the modular e-skin dashboard, including honeycomb-style module placement, object interaction, patch-oriented pressure visualization, module identifiers, and data-throughput feedback.
+- [`demo/demo2.mp4`](demo/demo2.mp4): Demonstrates the programmable FSR readout page, including MUX-controlled row scanning, ADC/FIFO-based column readout, MOSI command input, MISO output inspection, and hardware-derived heatmap generation.
+
+These videos show the current state of the prototype. The simulator remains in progress, and future videos will be updated as new hardware models, external MCU workflows, scan strategies, and algorithm experiments are added.
 
 ## Running
 
@@ -82,6 +105,9 @@ software-simulation/
     js/
       app.js                   # dashboard interaction, rendering, and API calls
       fsr-demo.js              # FSR visualization and MISO-driven heatmap logic
+  demo/
+    demo1.mp4                  # dashboard workflow demo
+    demo2.mp4                  # programmable FSR readout demo
   docs/
     references/                # project reports and source PDFs
   CHANGELOG.md                 # ordered record of pushed changes

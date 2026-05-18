@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-05-18 - Add Demo Videos and Repository Description
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Docs]** Added demo-video documentation to the repository README.
+   - The README now describes the dashboard workflow video and the programmable FSR readout video.
+   - The feature list was expanded to cover MOSI/MISO command testing, ADC/FIFO-derived heatmap generation, and future MCU-in-the-loop use.
+
+2. **[Assets]** Added two MP4 demo videos under `demo/`.
+   - `demo/demo1.mp4` documents the module-network dashboard and pressure-visualization workflow.
+   - `demo/demo2.mp4` documents the programmable FSR readout, ADC FIFO, MOSI input, and MISO output workflow.
+
+3. **[Docs]** Marked the project as actively under development.
+   - The README now states that additional scan strategies, external MCU workflows, event-driven sensing, VAE-style encoding, and multi-patch communication models will be updated later.
+
 ## 2026-05-15 - Unified Scan and Heatmap Pipeline
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
