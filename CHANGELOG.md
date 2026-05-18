@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-05-18 - Refresh FSR Readout Demo Preview
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Assets]** Replaced the programmable FSR readout demo recording with the updated `demo/demo2.mp4`.
+   - The repository now stores the latest hardware-readout workflow video for the project homepage.
+
+2. **[Assets]** Regenerated the GitHub-renderable FSR readout GIF preview.
+   - `demo/demo2-preview.gif` was rebuilt from the updated MP4 so the README preview matches the current demo.
+
 ## 2026-05-18 - Refresh Dashboard Demo Preview
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
