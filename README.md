@@ -51,17 +51,17 @@ This project is still under active development. The current repository captures 
 
 The repository includes two embedded demo previews to document the current simulator behavior. The original MP4 recordings are kept in `demo/`, while the GIF previews below are used because GitHub README pages do not render repository-hosted MP4 files as inline players.
 
-### Module Network Dashboard
-
-Demonstrates the modular e-skin dashboard, including honeycomb-style module placement, object interaction, patch-oriented pressure visualization, module identifiers, and data-throughput feedback.
-
-![Module network dashboard demo](demo/demo1-preview.gif)
-
 ### Programmable FSR Readout Demo
 
 Demonstrates the programmable FSR readout page, including MUX-controlled row scanning, ADC/FIFO-based column readout, MOSI command input, MISO output inspection, and hardware-derived heatmap generation.
 
-![Programmable FSR readout demo](demo/demo2-preview.gif)
+<img src="demo/demo2-preview.gif" alt="Programmable FSR readout demo" width="100%">
+
+### Module Network Dashboard
+
+Demonstrates the modular e-skin dashboard, including honeycomb-style module placement, object interaction, patch-oriented pressure visualization, module identifiers, and data-throughput feedback.
+
+<img src="demo/demo1-preview.gif" alt="Module network dashboard demo" width="100%">
 
 These videos show the current state of the prototype. The simulator remains in progress, and future videos will be updated as new hardware models, external MCU workflows, scan strategies, and algorithm experiments are added.
 

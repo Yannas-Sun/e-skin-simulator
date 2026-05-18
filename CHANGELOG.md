@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-05-18 - Normalize README Demo Preview Layout
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Docs]** Reordered the README demo previews.
+   - The programmable FSR readout demo now appears before the module-network dashboard demo.
+
+2. **[Appearance]** Normalized README demo preview display width.
+   - Both README previews now use the same `width="100%"` display rule.
+   - `demo/demo2-preview.gif` was regenerated at the same source width as the dashboard preview.
+
 ## 2026-05-18 - Refresh FSR Readout Demo Preview
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
