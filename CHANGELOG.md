@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-05-18 - Replace README Video Tags with Visible GIF Previews
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Docs]** Replaced README `<video>` tags with GitHub-renderable embedded GIF previews.
+   - GitHub removes repository-hosted `<video>` players from README rendering, which caused the demo section to appear blank.
+   - The README now displays `demo/demo1-preview.gif` and `demo/demo2-preview.gif` directly on the repository homepage.
+
+2. **[Assets]** Added two lightweight animated previews generated from the MP4 recordings.
+   - `demo/demo1-preview.gif` previews the module-network dashboard workflow.
+   - `demo/demo2-preview.gif` previews the programmable FSR readout workflow.
+   - The original MP4 files remain in `demo/` for the full-quality recordings.
+
 ## 2026-05-18 - Embed Demo Videos in GitHub README
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
