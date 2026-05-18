@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-05-18 - Refresh Dashboard Demo Preview
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Assets]** Replaced the module-network dashboard demo recording with the updated `demo/demo1.mp4`.
+   - The repository now stores the latest dashboard workflow video supplied for the project homepage.
+
+2. **[Assets]** Regenerated the GitHub-renderable dashboard GIF preview.
+   - `demo/demo1-preview.gif` was rebuilt from the updated MP4 so the README preview matches the current demo.
+
 ## 2026-05-18 - Replace README Video Tags with Visible GIF Previews
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
