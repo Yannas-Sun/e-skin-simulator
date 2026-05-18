@@ -49,10 +49,19 @@ This project is still under active development. The current repository captures 
 
 ## Demo Videos
 
-The repository includes two demo videos in [`demo/`](demo/) to document the current simulator behavior.
+The repository includes two embedded demo videos to document the current simulator behavior.
 
-- [`demo/demo1.mp4`](demo/demo1.mp4): Demonstrates the modular e-skin dashboard, including honeycomb-style module placement, object interaction, patch-oriented pressure visualization, module identifiers, and data-throughput feedback.
-- [`demo/demo2.mp4`](demo/demo2.mp4): Demonstrates the programmable FSR readout page, including MUX-controlled row scanning, ADC/FIFO-based column readout, MOSI command input, MISO output inspection, and hardware-derived heatmap generation.
+### Module Network Dashboard
+
+Demonstrates the modular e-skin dashboard, including honeycomb-style module placement, object interaction, patch-oriented pressure visualization, module identifiers, and data-throughput feedback.
+
+<video src="https://github.com/Yannas-Sun/e-skin-simulator/raw/main/demo/demo1.mp4" controls width="100%"></video>
+
+### Programmable FSR Readout Demo
+
+Demonstrates the programmable FSR readout page, including MUX-controlled row scanning, ADC/FIFO-based column readout, MOSI command input, MISO output inspection, and hardware-derived heatmap generation.
+
+<video src="https://github.com/Yannas-Sun/e-skin-simulator/raw/main/demo/demo2.mp4" controls width="100%"></video>
 
 These videos show the current state of the prototype. The simulator remains in progress, and future videos will be updated as new hardware models, external MCU workflows, scan strategies, and algorithm experiments are added.
 

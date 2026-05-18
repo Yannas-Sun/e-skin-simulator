@@ -508,53 +508,6 @@ h2 {
   line-height: 1.65;
 }
 
-.demo-video-section {
-  gap: 12px;
-}
-
-.demo-video-list {
-  display: grid;
-  gap: 12px;
-}
-
-.demo-video-card {
-  display: grid;
-  gap: 8px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--line);
-}
-
-.demo-video-card:last-child {
-  padding-bottom: 0;
-  border-bottom: 0;
-}
-
-.demo-video-card video {
-  display: block;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  background: #15201f;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-}
-
-.demo-video-card h3 {
-  margin: 0;
-  color: var(--ink);
-  font-size: 0.86rem;
-}
-
-.demo-video-card p,
-.demo-status {
-  color: var(--muted);
-  font-size: 0.76rem;
-  line-height: 1.42;
-}
-
-.demo-status {
-  margin-top: 12px;
-}
-
 .sim-module polygon.shell {
   fill: rgba(231, 243, 238, 0.94);
   stroke: #2f7b63;

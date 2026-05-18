@@ -1,8 +1,25 @@
 # Changelog
 
+## 2026-05-18 - Embed Demo Videos in GitHub README
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Docs]** Changed the GitHub repository homepage demo section from file links to embedded video players.
+   - The README now places the dashboard demo and programmable FSR readout demo directly under their feature descriptions.
+   - The videos use repository-hosted MP4 assets so visitors can watch them from the GitHub project page.
+
+2. **[Rollback]** Removed the demo-video panel from the local dashboard UI.
+   - The simulator dashboard no longer shows the two repository demo videos in the right-side control panel.
+   - The frontend CSS for the dashboard video cards was removed.
+
+3. **[Rollback]** Removed the local backend `/demo/` video-serving route.
+   - Video display is now handled by the GitHub README, so the Python simulator server no longer exposes repository-level MP4 files.
+
 ## 2026-05-18 - Show Demo Videos on the Homepage
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
+
+Superseded by `2026-05-18 - Embed Demo Videos in GitHub README`, which removes these videos from the local dashboard and keeps them on the GitHub repository homepage instead.
 
 1. **[Feature]** Embedded the two demo videos directly on the dashboard homepage.
    - The right-side panel now includes playable video cards for the module-network dashboard and programmable FSR readout demo.

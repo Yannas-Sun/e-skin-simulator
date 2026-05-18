@@ -4,7 +4,6 @@ import json
 import math
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote
 from typing import Any
 
 from .fsr_sampler import run_adc_mosi_program, run_fsr_readout
@@ -149,18 +148,6 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, directory=str(FRONTEND_ROOT), **kwargs)
 
-    def do_GET(self) -> None:
-        if self.path.startswith("/demo/"):
-            self.handle_demo_asset()
-            return
-        super().do_GET()
-
-    def do_HEAD(self) -> None:
-        if self.path.startswith("/demo/"):
-            self.handle_demo_asset(head_only=True)
-            return
-        super().do_HEAD()
-
     def do_POST(self) -> None:
         if self.path == "/api/simulate":
             self.handle_simulation()
@@ -172,48 +159,6 @@ class Handler(SimpleHTTPRequestHandler):
             self.handle_adc_mosi()
             return
         self.send_error(404)
-
-    def handle_demo_asset(self, head_only: bool = False) -> None:
-        relative = unquote(self.path.removeprefix("/demo/")).split("?", 1)[0]
-        asset_path = (ROOT / "demo" / relative).resolve()
-        demo_root = (ROOT / "demo").resolve()
-        if demo_root not in asset_path.parents or not asset_path.is_file():
-            self.send_error(404)
-            return
-
-        file_size = asset_path.stat().st_size
-        start = 0
-        end = file_size - 1
-        range_header = self.headers.get("Range")
-        if range_header and range_header.startswith("bytes="):
-            requested = range_header.removeprefix("bytes=").split(",", 1)[0]
-            start_text, _, end_text = requested.partition("-")
-            if start_text:
-                start = max(0, int(start_text))
-            if end_text:
-                end = min(file_size - 1, int(end_text))
-            self.send_response(206)
-            self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
-        else:
-            self.send_response(200)
-
-        if asset_path.suffix.lower() == ".mp4":
-            self.send_header("Content-Type", "video/mp4")
-        self.send_header("Accept-Ranges", "bytes")
-        self.send_header("Content-Length", str(end - start + 1))
-        self.end_headers()
-        if head_only:
-            return
-
-        with asset_path.open("rb") as asset_file:
-            asset_file.seek(start)
-            remaining = end - start + 1
-            while remaining > 0:
-                chunk = asset_file.read(min(1024 * 1024, remaining))
-                if not chunk:
-                    break
-                self.wfile.write(chunk)
-                remaining -= len(chunk)
 
     def handle_simulation(self) -> None:
         length = int(self.headers.get("Content-Length", "0"))
