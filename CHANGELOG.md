@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-05-18 - Show Demo Videos on the Homepage
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Feature]** Embedded the two demo videos directly on the dashboard homepage.
+   - The right-side panel now includes playable video cards for the module-network dashboard and programmable FSR readout demo.
+   - Each video is paired with a concise feature description, so users can understand the simulated workflow without opening the README.
+
+2. **[Logic]** Added backend static serving for repository demo videos.
+   - The Python server now exposes `/demo/demo1.mp4` and `/demo/demo2.mp4` from the repository-level `demo/` folder.
+   - MP4 responses support `HEAD` and byte-range requests so browser video controls can load metadata and seek more reliably.
+
+3. **[Docs]** Repeated the active-development notice in the homepage video section.
+   - The page now states that scan strategies, physical MCU-in-the-loop testing, event-driven sensing, compression, and multi-patch communication remain under development.
+
 ## 2026-05-18 - Add Demo Videos and Repository Description
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

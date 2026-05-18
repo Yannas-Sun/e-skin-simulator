@@ -180,6 +180,37 @@
             <li>SPI module bus, Ethernet patch link</li>
           </ul>
         </div>
+
+        <div class="panel-section demo-video-section">
+          <div class="section-title">
+            <h2>Demo Videos</h2>
+            <span>in development</span>
+          </div>
+          <div class="demo-video-list">
+            <article class="demo-video-card">
+              <video controls preload="metadata" src="/demo/demo1.mp4"></video>
+              <h3>Module Network Dashboard</h3>
+              <p>
+                Demonstrates honeycomb module placement, object loading, patch-level heatmap
+                generation, module IDs, and live communication throughput estimation.
+              </p>
+            </article>
+            <article class="demo-video-card">
+              <video controls preload="metadata" src="/demo/demo2.mp4"></video>
+              <h3>Programmable FSR Readout Demo</h3>
+              <p>
+                Shows the virtual hardware readout flow: MCU-controlled MUX row selection,
+                MAX11632-style ADC FIFO conversion, MOSI/MISO exchange, and hardware-derived
+                heatmap update.
+              </p>
+            </article>
+          </div>
+          <p class="note demo-status">
+            This simulator is still under active development. Future updates will extend scan
+            strategies, physical MCU-in-the-loop testing, event-driven sensing, compression, and
+            multi-patch communication.
+          </p>
+        </div>
       </aside>
     </main>
 
