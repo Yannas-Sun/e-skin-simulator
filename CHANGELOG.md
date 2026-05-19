@@ -1,32 +1,19 @@
 # Changelog
 
-## 2026-05-19 - Replace Prototype Header MCU with STM32G474CETx
+## 2026-05-19 - Move Prototype Hardware to Dedicated Branch
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
 
-1. **[Hardware]** Removed the old two-header MCU placeholder from the prototype schematic.
-   - The `J11` and `J12` 24-pin MCU header symbols were removed from `prototype/mainboard/mainboard.kicad_sch`.
-   - The old connector stub wiring in that MCU area was cleared to avoid leaving floating legacy header wiring.
+1. **[Repo]** Moved KiCad prototype hardware files out of `main`.
+   - The prototype schematic, project file, and PCB placeholder now live on branch `codex/hardware-prototype`.
+   - `main` is kept focused on the software simulator, demos, documentation, and virtual hardware model.
 
-2. **[Hardware]** Connected the new `STM32G474CETx` symbol according to the current module readout logic.
-   - `PA0-PA3` are assigned to shared MUX row-address lines `MUX_A0-MUX_A3`.
-   - `PB12-PB15` and `PB9-PB10` are assigned to ADC SPI, chip-select, and EOC signals.
-   - `PA4-PA7` are reserved for the upper FPGA/HUB SPI interface.
-   - MCU power pins are tied to `+3.3V` and `GND` net labels.
+2. **[Repo]** Moved hardware datasheets to the hardware branch.
+   - `DATA SHEET/MAX11626-MAX11633 (ADC).pdf` is removed from `main`.
+   - `DATA SHEET/cd74hc4067.pdf` was added to `codex/hardware-prototype` before that branch was pushed.
 
-3. **[Docs]** Added an on-schematic note documenting the STM32G474CETx pin assignment.
-   - The note summarizes the MUX address, ADC SPI/control, and upper-level SPI responsibilities.
-
-## 2026-05-19 - Update Prototype Schematic MCU Interface
-
-Changes are ordered from most important to least important. Each change is labeled with a type.
-
-1. **[Hardware]** Updated the prototype KiCad schematic MCU section from the previous Teensy connector wording to the current STM32G474 module MCU interface.
-   - The MCU connector title now reads `STM32G474 module MCU conn.`.
-   - The two 24-pin prototype headers are now labeled `STM32G474_MCU_left_header` and `STM32G474_MCU_right_header`.
-
-2. **[Docs]** Added an on-schematic note for the STM32G474 prototype header pair.
-   - The note identifies the header pair as the interface for scan control, ADC SPI, and the upper-level interface.
+3. **[Docs]** Replaced the previous main-branch KiCad changelog entries with this branch-migration note.
+   - Detailed prototype schematic history is preserved on the hardware branch.
 
 ## 2026-05-18 - Normalize README Demo Preview Layout
 
