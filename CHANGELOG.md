@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-05-19 - Update Prototype Schematic MCU Interface
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Hardware]** Updated the prototype KiCad schematic MCU section from the previous Teensy connector wording to the current STM32G474 module MCU interface.
+   - The MCU connector title now reads `STM32G474 module MCU conn.`.
+   - The two 24-pin prototype headers are now labeled `STM32G474_MCU_left_header` and `STM32G474_MCU_right_header`.
+
+2. **[Docs]** Added an on-schematic note for the STM32G474 prototype header pair.
+   - The note identifies the header pair as the interface for scan control, ADC SPI, and the upper-level interface.
+
 ## 2026-05-18 - Normalize README Demo Preview Layout
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
