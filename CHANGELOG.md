@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-05-19 - Replace Prototype Header MCU with STM32G474CETx
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Hardware]** Removed the old two-header MCU placeholder from the prototype schematic.
+   - The `J11` and `J12` 24-pin MCU header symbols were removed from `prototype/mainboard/mainboard.kicad_sch`.
+   - The old connector stub wiring in that MCU area was cleared to avoid leaving floating legacy header wiring.
+
+2. **[Hardware]** Connected the new `STM32G474CETx` symbol according to the current module readout logic.
+   - `PA0-PA3` are assigned to shared MUX row-address lines `MUX_A0-MUX_A3`.
+   - `PB12-PB15` and `PB9-PB10` are assigned to ADC SPI, chip-select, and EOC signals.
+   - `PA4-PA7` are reserved for the upper FPGA/HUB SPI interface.
+   - MCU power pins are tied to `+3.3V` and `GND` net labels.
+
+3. **[Docs]** Added an on-schematic note documenting the STM32G474CETx pin assignment.
+   - The note summarizes the MUX address, ADC SPI/control, and upper-level SPI responsibilities.
+
 ## 2026-05-19 - Update Prototype Schematic MCU Interface
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
