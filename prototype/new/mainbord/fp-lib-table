@@ -1,0 +1,4 @@
+(fp_lib_table
+	(version 7)
+	(lib (name "fsr_array") (type "KiCad") (uri "${KIPRJMOD}/fsr_array.pretty") (options "") (descr ""))
+)
