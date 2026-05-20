@@ -6,6 +6,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+from .accel_sampler import run_accel_readout, run_lis3dh_spi_program
 from .fsr_sampler import run_adc_mosi_program, run_fsr_readout
 
 
@@ -158,6 +159,12 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/api/adc-mosi":
             self.handle_adc_mosi()
             return
+        if self.path == "/api/accel-readout":
+            self.handle_accel_readout()
+            return
+        if self.path == "/api/lis3dh-spi":
+            self.handle_lis3dh_spi()
+            return
         self.send_error(404)
 
     def handle_simulation(self) -> None:
@@ -202,6 +209,41 @@ class Handler(SimpleHTTPRequestHandler):
                 object_row=int(payload.get("objectRow", payload.get("row", 1))),
                 object_size=float(payload.get("objectSize", 72)),
                 object_mass=float(payload.get("objectMass", payload.get("force", 62) * 10)),
+            )
+        except (TypeError, ValueError) as exc:
+            self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            data = json.dumps({"error": str(exc)}).encode("utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
+        self.write_json(response)
+
+    def handle_accel_readout(self) -> None:
+        length = int(self.headers.get("Content-Length", "0"))
+        payload = json.loads(self.rfile.read(length) or b"{}")
+        response = run_accel_readout(
+            sensor=int(payload.get("sensor", 1)),
+            object_row=float(payload.get("objectRow", 2.5)),
+            object_col=float(payload.get("objectCol", 2.5)),
+            object_size=float(payload.get("objectSize", 96)),
+            vibration_g=float(payload.get("vibrationG", 2.4)),
+            refresh_rate=float(payload.get("refreshRate", 25)),
+        )
+        self.write_json(response)
+
+    def handle_lis3dh_spi(self) -> None:
+        length = int(self.headers.get("Content-Length", "0"))
+        payload = json.loads(self.rfile.read(length) or b"{}")
+        try:
+            response = run_lis3dh_spi_program(
+                mosi_text=str(payload.get("mosi", "")),
+                sensor=int(payload.get("sensor", 1)),
+                object_row=float(payload.get("objectRow", 2.5)),
+                object_col=float(payload.get("objectCol", 2.5)),
+                object_size=float(payload.get("objectSize", 96)),
+                vibration_g=float(payload.get("vibrationG", 2.4)),
             )
         except (TypeError, ValueError) as exc:
             self.send_response(400)

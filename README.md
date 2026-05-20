@@ -47,6 +47,16 @@ This project is still under active development. The current repository captures 
 - Switch visualization behavior by refresh rate while keeping the same scan pipeline: MUX row scan followed by ADC FIFO column output
 - Use the simulator as a bridge toward physical MCU testing, where an external MCU can later drive or validate the same command and data-transfer logic
 
+### Programmable LIS3DH Accelerometer Demo
+
+- Open an accelerometer demo showing a 4 x 4 LIS3DH array with shared SPI and individual chip-select control through a MUX
+- Simulate LIS3DH SPI command encoding: `R/W`, multi-byte auto-increment, and 6-bit register address
+- Read `OUT_X_L` through `OUT_Z_H` using the datasheet-style `0xE8` command byte
+- Adjust the virtual object's vibration strength and footprint
+- Decode X/Y/Z acceleration only from returned MISO register bytes
+- Generate the hardware heatmap from decoded MISO data rather than direct object placement
+- Display counted SPI traffic for address lines, SCK, MOSI, MISO, CS, and the upstream MCU-to-FPGA frame
+
 ## Demo Videos
 
 The repository includes two embedded demo previews to document the current simulator behavior. The original MP4 recordings are kept in `demo/`, while the GIF previews below are used because GitHub README pages do not render repository-hosted MP4 files as inline players.
@@ -97,6 +107,7 @@ Use the HTTP address above rather than opening `index.html` directly, because th
    - `Ctrl+V`
    - `Delete` / `Backspace`
 8. Click `FSR Demo` to inspect the hardware readout path for one 16 x 16 FSR layer.
+9. Click `Accel Demo` to inspect the LIS3DH accelerometer-array readout path.
 
 ## Project Structure
 
@@ -105,14 +116,18 @@ software-simulation/
   server.py                    # root launcher; keeps `python server.py` working
   backend/
     server.py                  # Python HTTP server and simulation API
+    accel_hardware.py          # virtual LIS3DH, accelerometer CS MUX, and SPI transfer primitives
+    accel_sampler.py           # programmable LIS3DH scan controller using the virtual hardware
     fsr_hardware.py            # virtual DMUX, ADC, resistor, FSR, and FSR array primitives
     fsr_sampler.py             # programmable scan controller using the virtual hardware
   frontend/
+    accelerometer-demo.html    # LIS3DH accelerometer-array readout demo
     index.html                 # module-network dashboard
     fsr-demo.html              # FSR readout circuit demo
     styles.css                 # shared UI styling
     js/
       app.js                   # dashboard interaction, rendering, and API calls
+      accelerometer-demo.js    # LIS3DH visualization and MISO-driven heatmap logic
       fsr-demo.js              # FSR visualization and MISO-driven heatmap logic
   demo/
     demo1.mp4                  # dashboard workflow demo

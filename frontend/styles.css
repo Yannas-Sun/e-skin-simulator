@@ -688,6 +688,10 @@ h2 {
   min-height: 0;
 }
 
+.accel-demo-grid {
+  grid-template-columns: 390px minmax(720px, 1fr) 620px;
+}
+
 .demo-controls,
 .readout-panel {
   display: flex;
@@ -785,6 +789,11 @@ h2 {
   fill: #d9e7f6;
   stroke: #83a9d3;
   stroke-width: 3;
+}
+
+.accel-array-bg {
+  fill: #f8e8c9;
+  stroke: #d69d28;
 }
 
 .array-hit-target {
@@ -1015,6 +1024,25 @@ h2 {
   stroke: #9f3d31;
   stroke-width: 2;
   stroke-dasharray: none;
+}
+
+.accel-cell {
+  stroke: #6d7874;
+  stroke-width: 1.8;
+  vector-effect: non-scaling-stroke;
+}
+
+.accel-cell-active {
+  stroke: #d69d28;
+  stroke-width: 4;
+}
+
+.vibration-object {
+  fill: rgba(215, 87, 69, 0.18);
+  stroke: #9f3d31;
+  stroke-width: 2.4;
+  stroke-dasharray: 8 6;
+  pointer-events: none;
 }
 
 .circuit-title {

@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-05-20 - Add Programmable LIS3DH Accelerometer Demo
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Feature]** Added a new programmable LIS3DH accelerometer-array demo page.
+   - `frontend/accelerometer-demo.html` and `frontend/js/accelerometer-demo.js` show a 4 x 4 LIS3DH array with shared SPI, CS MUX selection, manual SPI input, and a MISO-derived heatmap.
+   - The dashboard now links to the new `Accel Demo` page next to the FSR demo.
+
+2. **[Logic]** Added virtual LIS3DH hardware and scan-controller models.
+   - `backend/accel_hardware.py` models LIS3DH registers, the SPI command byte format, auto-increment reads, signed X/Y/Z output registers, the 16-channel CS MUX, and counted line activity.
+   - `backend/accel_sampler.py` runs the initial full-frame scan: one CS-selected LIS3DH at a time, using `0xE8` to read `OUT_X_L` through `OUT_Z_H`.
+
+3. **[Logic]** Added accelerometer readout APIs.
+   - `/api/accel-readout` returns the full simulated frame and per-line traffic statistics.
+   - `/api/lis3dh-spi` lets users send custom LIS3DH SPI bytes and inspect the resulting MISO bytes.
+
+4. **[Appearance]** Added accelerometer-array circuit and heatmap visualization.
+   - The page shows the MCU, A1-A4 address lines, CS MUX, 4 x 4 accelerometer array, shared SPI lines, object vibration footprint, and hardware heatmap.
+   - Vibration strength and object size are adjustable from the controls panel.
+
+5. **[Docs]** Documented the new LIS3DH demo in the README.
+   - The README now lists the accelerometer demo features, usage entry point, and project files.
+
 ## 2026-05-19 - Move Prototype Hardware to Dedicated Branch
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LIS3DH Accelerometer Demo</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="demo-body">
+    <main class="demo-shell">
+      <header class="demo-header">
+        <div>
+          <p class="eyebrow">Hardware readout demo</p>
+          <h1>4 x 4 LIS3DH Array: CS MUX to STM32G474 to FPGA</h1>
+          <p>
+            A chip-select multiplexer enables one LIS3DH at a time. The MCU sends a datasheet-style
+            SPI command byte, reads OUT_X_L through OUT_Z_H over MISO, decodes X/Y/Z acceleration,
+            then maps vibration intensity from returned register bytes only.
+          </p>
+        </div>
+        <div class="toolbar-actions">
+          <a class="text-button link-button" href="fsr-demo.html">FSR Demo</a>
+          <a class="text-button link-button" href="index.html">Back to Dashboard</a>
+        </div>
+      </header>
+
+      <section class="demo-grid accel-demo-grid">
+        <aside class="demo-controls panel-section">
+          <div class="section-title">
+            <h2>Scan Controls</h2>
+            <span id="scanState">manual</span>
+          </div>
+          <label>
+            <span>Object size</span>
+            <input id="objectSizeRange" type="range" min="20" max="180" value="96" />
+            <output id="objectSizeValue">96 mm</output>
+          </label>
+          <label>
+            <span>Vibration strength</span>
+            <input id="vibrationRange" type="range" min="0" max="80" value="24" />
+            <output id="vibrationValue">2.4 g</output>
+          </label>
+          <label>
+            <span>Refresh rate</span>
+            <input id="refreshRateRange" type="range" min="1" max="700" value="25" />
+            <output id="refreshRateValue">25 Hz</output>
+          </label>
+          <p id="refreshRateNote" class="control-note"></p>
+          <button id="autoScan" class="text-button" type="button">Auto Scan</button>
+          <label>
+            <span>Manual LIS3DH SPI</span>
+            <textarea id="manualSpi" class="mosi-input" rows="4" spellcheck="false">0xE8 0x00 0x00 0x00 0x00 0x00 0x00</textarea>
+          </label>
+          <button id="runSpi" class="text-button" type="button">Run SPI</button>
+          <p id="spiStatus" class="control-note">0xE8 reads OUT_X_L..OUT_Z_H with auto-increment.</p>
+          <pre id="manualOutput" class="spi-frame miso-output">MISO output appears here after Run SPI.</pre>
+        </aside>
+
+        <section class="circuit-panel">
+          <svg id="accelCircuit" class="fsr-circuit accel-circuit" viewBox="0 0 1280 880" role="img" aria-label="LIS3DH accelerometer readout circuit demo"></svg>
+        </section>
+
+        <aside class="readout-panel">
+          <div class="panel-section">
+            <div class="section-title">
+              <h2>Current Reading</h2>
+              <span id="activeSensor">A1</span>
+            </div>
+            <div class="readout-stack">
+              <div>
+                <span>X axis</span>
+                <strong id="xReading">0.00 g</strong>
+              </div>
+              <div>
+                <span>Y axis</span>
+                <strong id="yReading">0.00 g</strong>
+              </div>
+              <div>
+                <span>Z dynamic</span>
+                <strong id="zReading">0.00 g</strong>
+              </div>
+              <div>
+                <span>Magnitude</span>
+                <strong id="magnitudeReading">0.00 g</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-section">
+            <div class="section-title">
+              <h2>SPI Transfer</h2>
+              <span>LIS3DH + uplink</span>
+            </div>
+            <pre id="spiFrame" class="spi-frame"></pre>
+          </div>
+
+          <div class="panel-section protocol-card">
+            <div class="section-title">
+              <h2>LIS3DH SPI / Register Format</h2>
+              <span>MSB first</span>
+            </div>
+            <table class="protocol-table" aria-label="LIS3DH SPI register table">
+              <thead>
+                <tr>
+                  <th>Register</th>
+                  <th>B7</th>
+                  <th>B6</th>
+                  <th>B5</th>
+                  <th>B4</th>
+                  <th>B3</th>
+                  <th>B2</th>
+                  <th>B1</th>
+                  <th>B0</th>
+                </tr>
+              </thead>
+              <tbody id="registerTable"></tbody>
+            </table>
+          </div>
+
+          <div class="panel-section module-info">
+            <div class="section-title">
+              <h2>Readout Logic</h2>
+              <span>one chip per step</span>
+            </div>
+            <ul>
+              <li>MCU writes A1-A4 to the chip-select MUX.</li>
+              <li>The MUX pulls exactly one LIS3DH CS low.</li>
+              <li>The selected LIS3DH shares SCK, MOSI, and MISO with the full array.</li>
+              <li>MCU sends <code>0xE8</code>: read bit, auto-increment bit, address <code>0x28</code>.</li>
+              <li>LIS3DH returns six data bytes for X, Y, and Z acceleration.</li>
+              <li>The heatmap is drawn only from decoded MISO bytes, not from object placement.</li>
+            </ul>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <script src="js/accelerometer-demo.js"></script>
+  </body>
+</html>
