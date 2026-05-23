@@ -1037,6 +1037,24 @@ h2 {
   stroke-width: 4;
 }
 
+.accel-cell-scanning {
+  animation: accel-scan-pulse 720ms ease-in-out infinite;
+}
+
+.scan-token {
+  fill: #d69d28;
+  stroke: #7a5300;
+  stroke-width: 1.6;
+  filter: drop-shadow(0 0 5px rgba(214, 157, 40, 0.7));
+}
+
+.scan-status {
+  fill: #0f715e;
+  font-family: Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  font-weight: 900;
+}
+
 .vibration-object {
   fill: rgba(215, 87, 69, 0.18);
   stroke: #9f3d31;
@@ -1150,6 +1168,19 @@ h2 {
 @keyframes dash-flow {
   to {
     stroke-dashoffset: -36;
+  }
+}
+
+@keyframes accel-scan-pulse {
+  0%,
+  100% {
+    stroke-width: 3;
+    opacity: 0.88;
+  }
+
+  50% {
+    stroke-width: 5;
+    opacity: 1;
   }
 }
 

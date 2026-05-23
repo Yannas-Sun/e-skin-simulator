@@ -7,6 +7,7 @@ const demo = {
   refreshRate: 25,
   auto: false,
   timer: null,
+  scanRun: 0,
   hardware: null,
   received: Array(16).fill(null),
 };
@@ -160,9 +161,18 @@ async function requestManualSpi() {
 }
 
 function applyFrameData(state) {
-  for (const item of state.heatmap) {
-    demo.received[item.sensor - 1] = item;
-  }
+  const sensor = state.selectedSensor;
+  const sample = state.selectedTransfer.sample;
+  demo.received[sensor - 1] = {
+    sensor,
+    row: Math.floor((sensor - 1) / 4) + 1,
+    col: ((sensor - 1) % 4) + 1,
+    value: sample.magnitudeG,
+    raw: sample.raw,
+    bytes: state.selectedTransfer.miso.slice(1),
+    address: state.mux.address,
+    addressBits: state.mux.addressBits,
+  };
 }
 
 async function update(sensor = demo.sensor) {
@@ -183,6 +193,7 @@ function drawCircuit() {
   drawObject(root);
   drawHeatmap(root);
   drawSpi(root);
+  drawScanStatus(root);
   updateReadouts();
   renderRegisterTable();
 }
@@ -222,12 +233,20 @@ function drawArray(root) {
       width: pos.w - margin * 2,
       height: pos.h - margin * 2,
       rx: 6,
-      class: selected ? "accel-cell accel-cell-active" : "accel-cell",
+      class: selected ? "accel-cell accel-cell-active accel-cell-scanning" : "accel-cell",
       fill,
     });
     addText(root, `A${sensor}`, pos.cx, pos.cy - 8, { class: "block-title", "text-anchor": "middle" });
     addText(root, item ? `${value.toFixed(2)}g` : "no data", pos.cx, pos.cy + 18, { class: "small-label", "text-anchor": "middle" });
     line(root, pos.cx, pos.y + pos.h, pos.cx, layout.muxY, selected ? "wire active-wire" : "wire sample-wire");
+    if (selected) {
+      root.appendChild(svg("circle", {
+        cx: pos.cx,
+        cy: layout.muxY - 10,
+        r: 6,
+        class: "scan-token",
+      }));
+    }
   }
 }
 
@@ -266,7 +285,10 @@ function drawHeatmap(root) {
     });
     addText(root, `A${sensor}`, x0 + col * cell + cell / 2, y0 + row * cell + cell / 2 + 4, { class: "clock-row", "text-anchor": "middle" });
   }
-  addText(root, "decoded from MISO bytes", x0, y0 + layout.heatmapSize + 24, { class: "clock-row" });
+  const selected = demo.hardware.selectedSensor;
+  const selectedItem = demo.received[selected - 1];
+  addText(root, `last write: A${selected} addr ${demo.hardware.mux.address.toString(2).padStart(4, "0")}`, x0, y0 + layout.heatmapSize + 22, { class: "clock-row" });
+  addText(root, selectedItem ? "heatmap cell updated after MISO decode" : "waiting for first MISO decode", x0, y0 + layout.heatmapSize + 36, { class: "clock-row" });
 }
 
 function drawSpi(root) {
@@ -284,6 +306,25 @@ function drawSpi(root) {
     addText(root, label, layout.mcuX + layout.mcuW + 12, y + 5, { class: active ? "pin-label active-label" : "pin-label" });
   });
   addText(root, "Shared SPI bus", layout.arrayX - 4, y0 - 13, { class: "small-label", "text-anchor": "end" });
+}
+
+function drawScanStatus(root) {
+  const x = layout.muxX;
+  const y = layout.muxY - 52;
+  const address = demo.hardware.mux.address;
+  const bits = demo.hardware.mux.addressBits.map((bit) => bit.level).join("");
+  addText(root, `Address ${bits} selects nCS_${demo.hardware.selectedSensor}`, x, y, {
+    class: "scan-status",
+  });
+  addText(root, "heatmap commits one cell after that LIS3DH returns XL/XH/YL/YH/ZL/ZH on MISO", x + 238, y, {
+    class: "clock-row",
+  });
+  root.appendChild(svg("circle", {
+    cx: x - 16 + ((address % 16) / 15) * 120,
+    cy: y - 4,
+    r: 5,
+    class: "scan-token",
+  }));
 }
 
 function updateReadouts() {
@@ -368,18 +409,30 @@ function manualLines(result) {
 
 function startAutoScan() {
   demo.auto = true;
+  demo.scanRun += 1;
+  const runId = demo.scanRun;
   autoScan.textContent = "Stop Scan";
   const period = Math.max(70, 1000 / (demo.refreshRate * 16));
-  demo.timer = setInterval(async () => {
+  const scanNext = async () => {
+    if (!demo.auto || runId !== demo.scanRun) return;
     demo.sensor = (demo.sensor % 16) + 1;
-    await update(demo.sensor);
-  }, period);
+    const state = await fetchHardware(demo.sensor);
+    if (!demo.auto || runId !== demo.scanRun) return;
+    demo.hardware = state;
+    applyFrameData(state);
+    drawCircuit();
+    if (demo.auto && runId === demo.scanRun) {
+      demo.timer = setTimeout(scanNext, period);
+    }
+  };
+  scanNext();
 }
 
 function stopAutoScan() {
   demo.auto = false;
+  demo.scanRun += 1;
   autoScan.textContent = "Auto Scan";
-  clearInterval(demo.timer);
+  clearTimeout(demo.timer);
   demo.timer = null;
   drawCircuit();
 }

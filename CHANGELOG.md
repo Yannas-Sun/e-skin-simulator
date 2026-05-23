@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-05-23 - Add Address-Stepped Accelerometer Scan Animation
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Changed the LIS3DH heatmap update path to commit one scanned sensor at a time.
+   - The accelerometer demo now updates only the currently addressed LIS3DH cell after its MISO bytes are decoded.
+   - Object placement no longer refreshes the full heatmap at once; stale cells remain until their own address is scanned again.
+
+2. **[Appearance]** Added address-based scan visualization to the accelerometer page.
+   - The selected array cell, chip-select route, address bits, and heatmap cell now highlight as the scan advances through `nCS_1` to `nCS_16`.
+   - A compact status line shows the active address and notes that the heatmap is committed after the `XL/XH/YL/YH/ZL/ZH` readback.
+
 ## 2026-05-20 - Add Programmable LIS3DH Accelerometer Demo
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
