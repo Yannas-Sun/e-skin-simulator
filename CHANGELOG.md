@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026-05-23 - Mainboard Hardware Prototype Update
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Hardware]** Renamed the KiCad prototype from `fsr_array` to `mainboard`.
+   - Project, schematic, PCB, symbol library, footprint library, and KiCad library tables now use `mainboard` naming.
+   - The custom footprint library now appears as `mainboard.pretty`.
+
+2. **[Hardware]** Replaced the previous Teensy-style controller direction with an STM32G474CETx mainboard controller design.
+   - Added STM32G474 MCU placement, 3.3 V supply usage, SWD programming header, reset/reference nets, and MCU-facing signal labels.
+   - Added level-shifting support around the MCU for 3.3 V MCU signals and 5 V peripheral-side logic.
+
+3. **[Hardware]** Updated the fixed divider resistors to SMT 10 kOhm-style resistor footprints.
+   - Replaced the earlier custom single-pad resistor structure with paired SMT resistor pads tied between ADC input nodes and GND.
+   - Adjusted resistor placement for ADC1/ADC2 symmetry and channel ordering.
+
+4. **[Hardware]** Added FPC/FFC connector support for mainboard-to-layer interconnects.
+   - Added `AFC01-S16FCA-00` footprint and schematic symbol for 16-channel FSR connections.
+   - Preserved `AFC01-S22FCA-00` support for ACC-layer connections and mapped connector pins to the current PCB usage.
+
+5. **[Layout]** Reworked the PCB outline and component placement toward a compact symmetric hexagonal module.
+   - The board uses a six-sided outline and more symmetric placement around the MCU.
+   - ADC, MUX, connector, resistor, USB, SWD, and mounting-hole placement has been iterated for a clearer mainboard layout.
+
+6. **[Docs]** Added footprint-library documentation for the custom mainboard footprints.
+   - `prototype/new/mainbord/FOOTPRINT_PIN_MAPPING.md` summarizes custom footprints and intended usage.
+   - `prototype/new/mainbord/mainboard.pretty/footprint_mapping.html` provides a visual table for the footprint library.
+
+7. **[Repo]** Replaced the old tracked `fsr_array` KiCad files on the hardware branch with the updated `mainboard` files.
+   - The hardware branch now stores the current mainboard prototype rather than the earlier `fsr_array` project naming.
+
 ## 2026-05-19 - Replace Prototype Header MCU with STM32G474CETx
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
