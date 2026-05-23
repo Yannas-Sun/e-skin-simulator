@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-05-23 - PCB Symmetry Adjustment
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Layout]** Mirrored right-side PCB components from their left-side counterparts.
+   - Adjusted ADC2, MUX2, right-side FPC connectors, right-side power/debug connector placement, and ADC2 pull-down resistor positions from the current left-side layout around the board centerline.
+   - Kept single centerline components such as the MCU, USB connector, ACC FPC, and central decoder unchanged.
+
+2. **[Layout]** Preserved the existing board outline and net connectivity.
+   - This update changes footprint placement and orientation only; schematic nets and component identities are unchanged.
+
 ## 2026-05-23 - Mainboard Hardware Prototype Update
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
