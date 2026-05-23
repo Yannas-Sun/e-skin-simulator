@@ -763,6 +763,11 @@ h2 {
   height: 880px;
 }
 
+.accel-circuit {
+  min-width: 0 !important;
+  max-width: 100%;
+}
+
 .block {
   fill: #ffffff;
   stroke: #15201f;

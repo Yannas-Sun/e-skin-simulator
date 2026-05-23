@@ -8,6 +8,7 @@ const demo = {
   auto: false,
   timer: null,
   scanRun: 0,
+  draggingObject: false,
   hardware: null,
   received: Array(16).fill(null),
 };
@@ -35,12 +36,12 @@ const spiStatus = document.getElementById("spiStatus");
 const manualOutput = document.getElementById("manualOutput");
 
 const layout = {
-  muxX: 72,
-  muxY: 585,
+  muxX: 360,
+  muxY: 615,
   muxW: 540,
-  muxH: 95,
-  mcuX: 70,
-  mcuY: 720,
+  muxH: 82,
+  mcuX: 470,
+  mcuY: 745,
   mcuW: 230,
   mcuH: 86,
   arrayX: 360,
@@ -206,15 +207,15 @@ function drawMcu(root) {
   labels.forEach((label, index) => {
     const x = layout.mcuX + 40 + index * 42;
     const bit = demo.hardware.mux.addressBits[index]?.level ?? 0;
-    line(root, x, layout.mcuY, x, layout.muxY + layout.muxH, bit ? "wire active-wire" : "wire");
+    line(root, x, layout.mcuY, x, layout.muxY + layout.muxH, bit ? "logic-wire high" : "logic-wire low");
     addText(root, label, x, layout.mcuY - 8, { class: bit ? "pin-label active-label" : "pin-label", "text-anchor": "middle" });
   });
 }
 
 function drawMux(root) {
   rect(root, { x: layout.muxX, y: layout.muxY, width: layout.muxW, height: layout.muxH, rx: 4, class: "block dmux" });
-  addText(root, "CS MUX / Decoder", layout.muxX + layout.muxW / 2, layout.muxY + 54, { class: "block-title", "text-anchor": "middle" });
-  addText(root, "only one nCS low", layout.muxX + layout.muxW / 2, layout.muxY + 76, { class: "small-label", "text-anchor": "middle" });
+  addText(root, "CS MUX / Decoder", layout.muxX + layout.muxW / 2, layout.muxY + 44, { class: "block-title", "text-anchor": "middle" });
+  addText(root, "one active-low nCS output at a time", layout.muxX + layout.muxW / 2, layout.muxY + 64, { class: "small-label", "text-anchor": "middle" });
 }
 
 function drawArray(root) {
@@ -292,7 +293,9 @@ function drawHeatmap(root) {
 }
 
 function drawSpi(root) {
-  const y0 = layout.arrayY + layout.arrayH + 45;
+  const y0 = layout.muxY - 82;
+  const x1 = layout.mcuX + layout.mcuW;
+  const x2 = layout.arrayX + layout.arrayW + 36;
   const labels = [
     ["SCK", "spi-sck"],
     ["MOSI", "spi-mosi"],
@@ -300,27 +303,27 @@ function drawSpi(root) {
     ["CS", "spi-cs"],
   ];
   labels.forEach(([label, cls], index) => {
-    const y = y0 + index * 22;
+    const y = y0 + index * 18;
     const active = demo.auto || demo.hardware.selectedSensor === demo.sensor;
-    line(root, layout.mcuX + layout.mcuW, y, layout.arrayX, y, active ? `spi-wire spi-active ${cls}` : `spi-wire ${cls}`);
-    addText(root, label, layout.mcuX + layout.mcuW + 12, y + 5, { class: active ? "pin-label active-label" : "pin-label" });
+    path(root, `M ${x1} ${layout.mcuY + 24 + index * 14} L ${x1 + 42} ${layout.mcuY + 24 + index * 14} L ${x1 + 42} ${y} L ${x2} ${y}`, active ? `spi-wire spi-active ${cls}` : `spi-wire ${cls}`);
+    addText(root, label, x1 + 48, y + 4, { class: active ? "pin-label active-label" : "pin-label" });
   });
-  addText(root, "Shared SPI bus", layout.arrayX - 4, y0 - 13, { class: "small-label", "text-anchor": "end" });
+  addText(root, "Shared SPI bus", x2 - 8, y0 - 12, { class: "small-label", "text-anchor": "end" });
 }
 
 function drawScanStatus(root) {
   const x = layout.muxX;
-  const y = layout.muxY - 52;
+  const y = layout.muxY - 18;
   const address = demo.hardware.mux.address;
   const bits = demo.hardware.mux.addressBits.map((bit) => bit.level).join("");
-  addText(root, `Address ${bits} selects nCS_${demo.hardware.selectedSensor}`, x, y, {
+  addText(root, `Address ${bits} -> nCS_${demo.hardware.selectedSensor}`, x + 22, y, {
     class: "scan-status",
   });
-  addText(root, "heatmap commits one cell after that LIS3DH returns XL/XH/YL/YH/ZL/ZH on MISO", x + 238, y, {
+  addText(root, "commit heatmap cell after MISO returns XL/XH/YL/YH/ZL/ZH", x + 208, y, {
     class: "clock-row",
   });
   root.appendChild(svg("circle", {
-    cx: x - 16 + ((address % 16) / 15) * 120,
+    cx: x + 8 + ((address % 16) / 15) * 120,
     cy: y - 4,
     r: 5,
     class: "scan-token",
@@ -472,19 +475,58 @@ runSpi.addEventListener("click", async () => {
   }
 });
 
-svgEl.addEventListener("pointerdown", async (event) => {
+function svgPointFromEvent(event) {
   const rectBox = svgEl.getBoundingClientRect();
-  const x = ((event.clientX - rectBox.left) / rectBox.width) * 1280;
-  const y = ((event.clientY - rectBox.top) / rectBox.height) * 880;
-  if (x >= layout.arrayX && x <= layout.arrayX + layout.arrayW && y >= layout.arrayY && y <= layout.arrayY + layout.arrayH) {
-    const cellW = layout.arrayW / 4;
-    const cellH = layout.arrayH / 4;
-    demo.objectCol = Math.max(1, Math.min(4, (x - layout.arrayX) / cellW + 0.5));
-    demo.objectRow = Math.max(1, Math.min(4, (y - layout.arrayY) / cellH + 0.5));
-    const col = Math.max(1, Math.min(4, Math.floor((x - layout.arrayX) / cellW) + 1));
-    const row = Math.max(1, Math.min(4, Math.floor((y - layout.arrayY) / cellH) + 1));
-    demo.sensor = (row - 1) * 4 + col;
-    await update(demo.sensor);
+  const viewBox = svgEl.viewBox.baseVal;
+  return {
+    x: viewBox.x + ((event.clientX - rectBox.left) / rectBox.width) * viewBox.width,
+    y: viewBox.y + ((event.clientY - rectBox.top) / rectBox.height) * viewBox.height,
+  };
+}
+
+function pointInsideArray(point) {
+  return point.x >= layout.arrayX && point.x <= layout.arrayX + layout.arrayW && point.y >= layout.arrayY && point.y <= layout.arrayY + layout.arrayH;
+}
+
+function moveObjectTo(point) {
+  const cellW = layout.arrayW / 4;
+  const cellH = layout.arrayH / 4;
+  demo.objectCol = Math.max(1, Math.min(4, (point.x - layout.arrayX) / cellW + 0.5));
+  demo.objectRow = Math.max(1, Math.min(4, (point.y - layout.arrayY) / cellH + 0.5));
+}
+
+svgEl.addEventListener("pointerdown", (event) => {
+  const point = svgPointFromEvent(event);
+  if (!pointInsideArray(point)) return;
+  demo.draggingObject = true;
+  try {
+    svgEl.setPointerCapture(event.pointerId);
+  } catch {
+    // Synthetic test events do not always create an active pointer capture target.
+  }
+  moveObjectTo(point);
+  drawCircuit();
+});
+
+svgEl.addEventListener("pointermove", (event) => {
+  if (!demo.draggingObject) return;
+  moveObjectTo(svgPointFromEvent(event));
+  drawCircuit();
+});
+
+svgEl.addEventListener("pointerup", (event) => {
+  if (!demo.draggingObject) return;
+  demo.draggingObject = false;
+  if (event.pointerId !== undefined && svgEl.hasPointerCapture(event.pointerId)) {
+    svgEl.releasePointerCapture(event.pointerId);
+  }
+  drawCircuit();
+});
+
+svgEl.addEventListener("pointercancel", (event) => {
+  demo.draggingObject = false;
+  if (event.pointerId !== undefined && svgEl.hasPointerCapture(event.pointerId)) {
+    svgEl.releasePointerCapture(event.pointerId);
   }
 });
 

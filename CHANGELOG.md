@@ -12,6 +12,11 @@ Changes are ordered from most important to least important. Each change is label
    - The selected array cell, chip-select route, address bits, and heatmap cell now highlight as the scan advances through `nCS_1` to `nCS_16`.
    - A compact status line shows the active address and notes that the heatmap is committed after the `XL/XH/YL/YH/ZL/ZH` readback.
 
+3. **[Fix]** Corrected the accelerometer circuit layout and object interaction.
+   - The accelerometer SVG now uses a focused viewBox and no longer inherits the FSR page's wide minimum SVG width.
+   - The CS MUX, MCU address lines, SPI bus, scan status text, and heatmap are repositioned to avoid the previous visual overlap.
+   - The vibration object now supports pointer drag instead of only click-to-place movement.
+
 ## 2026-05-20 - Add Programmable LIS3DH Accelerometer Demo
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
