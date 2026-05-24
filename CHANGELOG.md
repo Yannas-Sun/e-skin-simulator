@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-05-24 - Hardware Snapshot Sync
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Hardware]** Synced the current local `mainboard` KiCad project state to the hardware branch.
+   - Updated the PCB, schematic, project, and KiCad layout metadata from `prototype/new/mainbord`.
+   - Preserved the current local component placement and hardware connectivity work as the latest tracked prototype snapshot.
+
+2. **[Repo]** Added the latest KiCad auto-backup archives for the mainboard project.
+   - These backups document the recent hardware editing history alongside the active KiCad files.
+   - Transient KiCad lock files remain excluded from the pushed snapshot.
+
 ## 2026-05-23 - PCB Symmetry Adjustment
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

@@ -40,8 +40,8 @@
         "other_text_upright": false,
         "pads": {
           "drill": 0.0,
-          "height": 0.95,
-          "width": 0.95
+          "height": 1.0,
+          "width": 1.1
         },
         "silk_line_width": 0.1524,
         "silk_text_italic": false,
@@ -61,11 +61,11 @@
           "hatch_smoothing_level": 0,
           "hatch_smoothing_value": 0.1,
           "hatch_thickness": 1.0,
-          "min_clearance": 0.508,
+          "min_clearance": 0.0,
           "min_island_area": 10.0,
           "min_thickness": 0.25,
-          "pad_connection": 1,
-          "remove_islands": 0,
+          "pad_connection": 2,
+          "remove_islands": 1,
           "thermal_relief_gap": 0.5,
           "thermal_relief_spoke_width": 0.5
         }
@@ -549,14 +549,51 @@
         "via_diameter": 0.6,
         "via_drill": 0.3,
         "wire_width": 6
+      },
+      {
+        "clearance": 0.15,
+        "name": "3.3v",
+        "pcb_color": "rgba(0, 0, 0, 0.000)",
+        "priority": 0,
+        "schematic_color": "rgba(0, 0, 0, 0.000)",
+        "track_width": 0.3,
+        "tuning_profile": "",
+        "via_diameter": 0.6
+      },
+      {
+        "clearance": 0.2,
+        "name": "5v",
+        "pcb_color": "rgba(0, 0, 0, 0.000)",
+        "priority": 1,
+        "schematic_color": "rgba(0, 0, 0, 0.000)",
+        "track_width": 0.5,
+        "tuning_profile": "",
+        "via_diameter": 0.6,
+        "via_drill": 0.3
       }
     ],
     "meta": {
       "version": 5
     },
-    "net_colors": null,
+    "net_colors": {
+      "+3.3V": "rgb(255, 231, 7)",
+      "+5V": "rgb(189, 0, 255)"
+    },
     "netclass_assignments": null,
-    "netclass_patterns": []
+    "netclass_patterns": [
+      {
+        "netclass": "5v",
+        "pattern": "+5V"
+      },
+      {
+        "netclass": "3.3v",
+        "pattern": "+3.3V"
+      },
+      {
+        "netclass": "Default",
+        "pattern": ""
+      }
+    ]
   },
   "pcbnew": {
     "last_paths": {
@@ -695,7 +732,7 @@
         "uuid": "a0ff3041-6447-44e9-8625-896e0cfa829f"
       }
     ],
-    "used_designators": "",
+    "used_designators": "H4-6",
     "variants": []
   },
   "sheets": [
