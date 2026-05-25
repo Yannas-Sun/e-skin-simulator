@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-05-25 - Mainboard 2.0 First Routed PCB
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Layout]** Completed the first full PCB layout and routing pass for the `mainboard` 2.0 hardware prototype.
+   - The current pushed snapshot contains the routed `mainboard.kicad_pcb`, updated schematic, project metadata, custom footprint library, generated documentation, 3D model assets, and KiCad backup archives from the active local 2.0 project folder.
+   - The PCB snapshot represents the first complete routed/layout version ready for DRC review, copper-pour verification, manufacturing-file cleanup, and final pre-fabrication checks.
+
+2. **[Repo]** Reorganized the hardware branch to contain only the current `mainboard` 2.0 hardware project contents plus this changelog.
+   - Removed the previous software simulator, demo, old prototype, and reference-document files from the hardware branch.
+   - Preserved `CHANGELOG.md` as the branch-level hardware history while replacing the branch contents with the latest local 2.0 KiCad project files.
+
 ## 2026-05-24 - Hardware Snapshot Sync
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
