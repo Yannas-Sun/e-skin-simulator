@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-05-25 - README Schematic Image Layout Update
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Documentation]** Replaced the embedded complete schematic preview with a rendered PNG image.
+   - Added `docs/Graph/schematic/mainboard.png` for direct README display.
+   - Kept the vector PDF schematic link for download and high-resolution review.
+
+2. **[Documentation]** Placed the USB power input and power conversion images side by side.
+   - The README now presents the USB-B 5 V input and AP2112K-3.3 regulator blocks horizontally within the same power section.
+
 ## 2026-05-25 - README Power Section Refinement
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

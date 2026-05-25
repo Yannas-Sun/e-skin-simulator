@@ -16,9 +16,9 @@ The rendered view provides a quick mechanical check of the connector positions, 
 
 ## Complete Schematic
 
-GitHub README files cannot reliably embed PDF pages directly, so the complete schematic is shown below as an SVG vector export. The original PDF vector version is linked for download and printing.
+GitHub README files cannot reliably embed PDF pages directly, so the complete schematic is shown below as a rendered image. The original PDF vector version is linked for download and printing.
 
-![Complete schematic](docs/Graph/schematic/mainboard.svg)
+![Complete schematic](docs/Graph/schematic/mainboard.png)
 
 Vector PDF version: [docs/Graph/schematic/mainboard.pdf](docs/Graph/schematic/mainboard.pdf).
 
@@ -58,9 +58,9 @@ This structure supports scalable inertial sensing without assigning a separate M
 
 ### USB Power Input and Power Conversion
 
-![USB schematic block](docs/Graph/schematic/USB.png)
-
-![Power converter schematic block](docs/Graph/schematic/POWER_CONVERTER.png)
+| USB-B 5 V input | 5 V to 3.3 V conversion |
+| --- | --- |
+| ![USB schematic block](docs/Graph/schematic/USB.png) | ![Power converter schematic block](docs/Graph/schematic/POWER_CONVERTER.png) |
 
 The USB-B connector is currently used as a 5 V power input. It is not intended as the primary STM32 programming interface in this revision; programming is handled through SWD. The board then generates a local 3.3 V rail using an AP2112K-3.3 regulator. The 3.3 V rail powers the MCU and low-voltage digital/signal-processing components. Local decoupling capacitors are placed around the regulator and IC supply pins to reduce supply noise.
 
