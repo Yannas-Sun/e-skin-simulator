@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-05-25 - Hardware README and Schematic Documentation
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Documentation]** Added a hardware branch README for the current `mainboard` 2.0 prototype.
+   - The README opens with the PCB layout image and 3D render graph so the branch immediately shows the current board state.
+   - Added a concise project background and working-principle summary for the STM32G474-based module architecture.
+
+2. **[Documentation]** Added schematic visual documentation for the main functional blocks.
+   - Embedded the complete schematic SVG and linked the PDF version.
+   - Added illustrated sections for MCU control, FSR row MUX scanning, FSR ADC column readout, ACC-layer selection, power conversion, USB power input, and module-to-module power links.
+
+3. **[Repo]** Synced the latest local `mainboard` 2.0 KiCad files and generated graph assets to the hardware branch.
+   - Included updated schematic, PCB, project metadata, custom symbols/footprints, 3D model, and `docs/Graph` image assets.
+
 ## 2026-05-25 - Mainboard 2.0 First Routed PCB
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
