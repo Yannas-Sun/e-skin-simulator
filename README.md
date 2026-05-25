@@ -16,9 +16,11 @@ The rendered view provides a quick mechanical check of the connector positions, 
 
 ## Complete Schematic
 
+GitHub README files cannot reliably embed PDF pages directly, so the complete schematic is shown below as an SVG vector export. The original PDF vector version is linked for download and printing.
+
 ![Complete schematic](docs/Graph/schematic/mainboard.svg)
 
-A PDF version is also available at [docs/Graph/schematic/mainboard.pdf](docs/Graph/schematic/mainboard.pdf).
+Vector PDF version: [docs/Graph/schematic/mainboard.pdf](docs/Graph/schematic/mainboard.pdf).
 
 ## Functional Blocks
 
@@ -54,17 +56,13 @@ The accelerometer layer is connected through a dedicated FPC interface. A CD74HC
 
 This structure supports scalable inertial sensing without assigning a separate MCU chip-select pin to every accelerometer.
 
-### Power Conversion
-
-![Power converter schematic block](docs/Graph/schematic/POWER_CONVERTER.png)
-
-The board receives a 5 V input and generates a local 3.3 V rail using an AP2112K-3.3 regulator. The 3.3 V rail powers the MCU and low-voltage digital/signal-processing components. Local decoupling capacitors are placed around the regulator and IC supply pins to reduce supply noise.
-
-### USB Power Input
+### USB Power Input and Power Conversion
 
 ![USB schematic block](docs/Graph/schematic/USB.png)
 
-The USB-B connector is currently used as a 5 V power input. It is not intended as the primary STM32 programming interface in this revision; programming is handled through SWD.
+![Power converter schematic block](docs/Graph/schematic/POWER_CONVERTER.png)
+
+The USB-B connector is currently used as a 5 V power input. It is not intended as the primary STM32 programming interface in this revision; programming is handled through SWD. The board then generates a local 3.3 V rail using an AP2112K-3.3 regulator. The 3.3 V rail powers the MCU and low-voltage digital/signal-processing components. Local decoupling capacitors are placed around the regulator and IC supply pins to reduce supply noise.
 
 ### Module-to-Module Power Link
 

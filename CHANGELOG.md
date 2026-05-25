@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-05-25 - README Power Section Refinement
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Documentation]** Merged the USB power input and power conversion descriptions into one hardware power section.
+   - The README now presents the USB-B 5 V input and AP2112K-3.3 regulation path together to make the power flow easier to follow.
+
+2. **[Documentation]** Clarified complete schematic rendering in the README.
+   - The complete schematic remains embedded as an SVG vector export for direct GitHub display.
+   - The PDF vector schematic is linked separately for download and printing because GitHub README rendering does not reliably inline PDF pages.
+
 ## 2026-05-25 - Hardware README and Schematic Documentation
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
