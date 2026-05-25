@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-05-25 - README Development Status Update
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Documentation]** Updated the README development notes to reflect the current hardware status.
+   - The mainboard 2.0 design is now described as having passed the current schematic, layout, routing, footprint, and documentation review tests.
+   - The next development stage is identified as ACC layer PCB design and FSR sensing layer design.
+
 ## 2026-05-25 - README Schematic Image Layout Update
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

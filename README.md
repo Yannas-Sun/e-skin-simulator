@@ -82,6 +82,6 @@ The module includes simple power-link headers for sharing 5 V and ground across 
 
 ## Development Notes
 
-- The PCB has completed a first full layout and routing pass.
-- The design should still be checked through ERC, DRC, footprint orientation review, FPC pin-order verification, and power integrity review before fabrication.
-- Future revisions may refine the module-to-module communication interface, FPGA/host integration, and local firmware protocol.
+- The mainboard 2.0 design has passed the current schematic, layout, routing, footprint, and documentation review tests.
+- The project is now ready to move into the next hardware stage: designing the ACC layer PCB and the FSR sensing layer.
+- Upcoming work will focus on ACC-layer connector placement, accelerometer routing, FSR electrode geometry, layer-to-mainboard alignment, and final integration across the modular e-skin stack.
