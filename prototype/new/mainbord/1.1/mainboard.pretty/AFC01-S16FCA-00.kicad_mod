@@ -1,0 +1,246 @@
+(footprint "AFC01-S16FCA-00"
+	(version 20240108)
+	(generator "codex")
+	(layer "F.Cu")
+	(descr "JUSHUO AFC01-S16FCA-00, 16-pin 0.5mm pitch right-angle FPC/FFC connector, bottom contact")
+	(tags "FPC FFC 16P 0.5mm AFC01-S16FCA-00")
+	(property "Reference" "REF**"
+		(at 0 -4.6 0)
+		(layer "F.SilkS")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Value" "AFC01-S16FCA-00"
+		(at 0 4.6 0)
+		(layer "F.Fab")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" "${KIPRJMOD}/../../../DATA SHEET/connector (AFC01-S16FCA-00).PDF"
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr smd)
+	(fp_line
+		(start -6.25 -2.4)
+		(end -6.25 -4.15)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+	)
+	(fp_line
+		(start -6.25 -4.15)
+		(end 6.25 -4.15)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+	)
+	(fp_line
+		(start 6.25 -4.15)
+		(end 6.25 -2.4)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+	)
+	(fp_line
+		(start -4.7 2.35)
+		(end -4.15 2.9)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+	)
+	(fp_line
+		(start -4.15 2.9)
+		(end -3.6 2.35)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+	)
+	(fp_line
+		(start -6.2 2.15)
+		(end 6.2 2.15)
+		(stroke
+			(width 0.1)
+			(type dash)
+		)
+		(layer "F.Fab")
+	)
+	(fp_line
+		(start -6.2 -4.15)
+		(end 6.2 -4.15)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(layer "F.Fab")
+	)
+	(fp_line
+		(start -6.2 -4.15)
+		(end -6.2 2.15)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(layer "F.Fab")
+	)
+	(fp_line
+		(start 6.2 -4.15)
+		(end 6.2 2.15)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(layer "F.Fab")
+	)
+	(fp_rect
+		(start -6.7 -4.5)
+		(end 6.7 2.55)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(fill none)
+		(layer "F.CrtYd")
+	)
+	(fp_text user "1"
+		(at -5.15 2.35 0)
+		(layer "F.SilkS")
+		(effects
+			(font
+				(size 0.8 0.8)
+				(thickness 0.12)
+			)
+		)
+	)
+	(pad "1" smd roundrect
+		(at -3.75 1.3)
+		(size 0.3 1.3)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(roundrect_rratio 0.2)
+	)
+	(pad "2" smd roundrect
+		(at -3.25 1.3)
+		(size 0.3 1.3)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(roundrect_rratio 0.2)
+	)
+	(pad "3" smd roundrect
+		(at -2.75 1.3)
+		(size 0.3 1.3)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(roundrect_rratio 0.2)
+	)
+	(pad "4" smd roundrect
+		(at -2.25 1.3)
+		(size 0.3 1.3)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(roundrect_rratio 0.2)
+	)
+	(pad "5" smd roundrect
+		(at -1.75 1.3)
+		(size 0.3 1.3)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(roundrect_rratio 0.2)
+	)
+	(pad "6" smd roundrect
+		(at -1.25 1.3)
+		(size 0.3 1.3)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(roundrect_rratio 0.2)
+	)
+	(pad "7" smd roundrect
+		(at -0.75 1.3)
+		(size 0.3 1.3)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(roundrect_rratio 0.2)
+	)
+	(pad "8" smd roundrect
+		(at -0.25 1.3)
+		(size 0.3 1.3)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(roundrect_rratio 0.2)
+	)
+	(pad "9" smd roundrect
+		(at 0.25 1.3)
+		(size 0.3 1.3)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(roundrect_rratio 0.2)
+	)
+	(pad "10" smd roundrect
+		(at 0.75 1.3)
+		(size 0.3 1.3)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(roundrect_rratio 0.2)
+	)
+	(pad "11" smd roundrect
+		(at 1.25 1.3)
+		(size 0.3 1.3)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(roundrect_rratio 0.2)
+	)
+	(pad "12" smd roundrect
+		(at 1.75 1.3)
+		(size 0.3 1.3)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(roundrect_rratio 0.2)
+	)
+	(pad "13" smd roundrect
+		(at 2.25 1.3)
+		(size 0.3 1.3)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(roundrect_rratio 0.2)
+	)
+	(pad "14" smd roundrect
+		(at 2.75 1.3)
+		(size 0.3 1.3)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(roundrect_rratio 0.2)
+	)
+	(pad "15" smd roundrect
+		(at 3.25 1.3)
+		(size 0.3 1.3)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(roundrect_rratio 0.2)
+	)
+	(pad "16" smd roundrect
+		(at 3.75 1.3)
+		(size 0.3 1.3)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(roundrect_rratio 0.2)
+	)
+	(pad "17" smd rect
+		(at 5.45 -1.3)
+		(size 1.6 2.0)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+	)
+	(pad "18" smd rect
+		(at -5.45 -1.3)
+		(size 1.6 2.0)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+	)
+)

@@ -1,0 +1,13 @@
+# KiCad automatic backups and local editor state
+**/.history/
+**/backups/
+**/*-backups/
+**/*.backup_before_*
+**/*.codex_backup_before_*
+**/*.bak
+**/*.lck
+**/~*
+
+# Generated local footprint caches and temporary files
+**/fp-info-cache
+**/.codex*

@@ -1,0 +1,5 @@
+(sym_lib_table
+	(version 7)
+	(lib (name "mainboard-eagle-import") (type "KiCad") (uri "${KIPRJMOD}/mainboard-eagle-import.kicad_sym") (options "") (descr "Imported project symbols"))
+	(lib (name "mainboard_custom") (type "KiCad") (uri "${KIPRJMOD}/mainboard_custom.kicad_sym") (options "") (descr "Project custom symbols"))
+)
