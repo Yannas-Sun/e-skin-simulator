@@ -10,7 +10,7 @@ The hardware is still under active development. This snapshot records the first 
 
 The PCB places the local MCU near the center of the module and distributes the row-scanning, column-readout, accelerometer, programming, and power interfaces around it. The layout is intended to support a compact module form factor while keeping the FSR row-driving and ADC column-reading paths organized.
 
-![3D render](docs/Graph/rendergraph.png)
+![3D render](docs/Graph/Rendering.png)
 
 The rendered view provides a quick mechanical check of the connector positions, IC placement, and board-level symmetry. It is useful for reviewing assembly access, cable direction, and whether the module can be integrated into a larger patch structure.
 
