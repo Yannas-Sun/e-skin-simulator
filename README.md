@@ -14,6 +14,18 @@ The simulated e-skin module follows the hardware structure described in the repo
 
 The simulator is intended as an early design and communication tool rather than a high-fidelity finite-element or electronics model.
 
+## Hardware Module Preview
+
+The simulator is developed alongside a modular hardware prototype. Each hexagonal module is designed as a compact stack containing a local mainboard, a distributed accelerometer layer, and a folded FSR pressure-sensing array.
+
+![Complete multi-layer e-skin module render](docs/hardware/module-render.png)
+
+The same geometry supports patch-level assembly. The render below shows a five-module configuration that motivates the simulator's honeycomb workspace, patch grouping, and scalable data-throughput tools.
+
+![Five-module e-skin patch render](docs/hardware/multi-module-demo.png)
+
+The complete PCB layouts, schematics, layer renders, and hardware development notes are maintained on the [`codex/hardware-prototype` branch](https://github.com/Yannas-Sun/e-skin-simulator/tree/codex/hardware-prototype).
+
 ## Development Status
 
 This project is still under active development. The current repository captures the first programmable simulation workflow, hardware-readout demo, and visualization interface. New functions will continue to be added, including richer scan strategies, external MCU-in-the-loop testing, event-driven sensing experiments, encoder/VAE-style data compression, and more complete multi-patch communication models.
