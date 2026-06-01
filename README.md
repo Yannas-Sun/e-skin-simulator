@@ -1,87 +1,116 @@
-# E-Skin Mainboard 2.0 Hardware
+# Modular Multi-Layer Electronic Skin
 
-This repository branch documents the current mainboard hardware prototype for a modular multi-layer e-skin module. The board is designed around a local STM32G474 MCU that scans the FSR layer, reads the ADC channels, communicates with the accelerometer layer, and prepares the module for later patch-level aggregation.
+This repository documents an in-progress modular electronic-skin platform for robotic tactile sensing and feedback. Each hexagonal module combines a local control board, a distributed accelerometer layer, and a pressure-sensitive FSR array. Multiple modules can be assembled into a larger patch while preserving a repeatable mechanical and electrical interface.
 
-The hardware is still under active development. This snapshot records the first complete PCB layout and routing pass for the current architecture.
+The current hardware iteration is designed around a hierarchical **host - patch - module** architecture. Each module contains its own STM32G474 MCU so that scanning, synchronization, data packaging, and future local encoding strategies can be developed close to the sensors before data is forwarded to a higher-level controller or FPGA.
 
-## PCB Overview
+## Module Overview
 
-![PCB layout](docs/Graph/PCB.png)
+![Complete multi-layer e-skin module render](prototype/new/docs/Rendering.png)
 
-The PCB places the local MCU near the center of the module and distributes the row-scanning, column-readout, accelerometer, programming, and power interfaces around it. The layout is intended to support a compact module form factor while keeping the FSR row-driving and ADC column-reading paths organized.
+The module is built as a compact stack:
 
-![3D render](docs/Graph/rendergraph.png)
+1. **Mainboard:** local STM32G474 control, power conversion, FSR scanning interfaces, ADC readout, and ACC-layer selection.
+2. **ACC layer:** a distributed accelerometer layer with 16 sensing islands connected through flexible traces.
+3. **FSR array:** a folded flexible pressure-sensing structure with orthogonal electrode layers and a connector tail.
 
-The rendered view provides a quick mechanical check of the connector positions, IC placement, and board-level symmetry. It is useful for reviewing assembly access, cable direction, and whether the module can be integrated into a larger patch structure.
+## Multi-Module Demo
 
-## Complete Schematic
+![Five-module e-skin patch render](prototype/new/docs/DEMO.png)
 
-GitHub README files cannot reliably embed PDF pages directly, so the complete schematic is shown below as a rendered image. The original PDF vector version is linked for download and printing.
+The five-module render demonstrates the intended patch-level deployment. The hexagonal geometry supports repeatable tiling while each module remains independently serviceable. This structure is intended to scale toward synchronized multi-module sensing, local data aggregation, event-driven acquisition, and future VAE-based encoding experiments.
 
-![Complete schematic](docs/Graph/schematic/mainboard.png)
+## Hardware Layers
 
-Vector PDF version: [docs/Graph/schematic/mainboard.pdf](docs/Graph/schematic/mainboard.pdf).
+### 1. Mainboard
 
-## Functional Blocks
-
-### MCU Control Core
-
-![MCU schematic block](docs/Graph/schematic/MCU.png)
-
-The main controller is an STM32G474-series MCU. It replaces the earlier Teensy-based prototype and acts as the local controller for one e-skin module. Its responsibilities include row-scan control, ADC command generation, ADC data readout, accelerometer-layer selection, event handling, and future local encoding or compression algorithms.
-
-The MCU also exposes an SWD programming/debug interface so firmware can be loaded and inspected directly during bring-up.
-
-### FSR Row Scanning MUX
-
-![FSR MUX schematic block](docs/Graph/schematic/FSR_MUX.png)
-
-The FSR row side is driven through CD74HC4067 analog multiplexers. The MCU controls the selected row using the shared address lines `S0-S3` and enable lines. During scanning, only the selected row is actively driven, while the ADC side observes the corresponding column voltages.
-
-This keeps the number of MCU pins low while allowing the module to address a 16-row sensing structure.
-
-### FSR Column ADC Readout
-
-![FSR ADC schematic block](docs/Graph/schematic/FSR_ADC.png)
-
-The column side is measured through MAX11633-family ADC devices. Each column input is paired with a 10 kOhm fixed resistor to form a voltage divider with the external FSR element. When pressure changes the FSR resistance, the column voltage changes and is converted into digital data by the ADC.
-
-The MCU communicates with the ADCs over SPI-style control and readout lines, including chip-select, clock, MOSI command input, MISO conversion output, and end-of-conversion signalling.
-
-### Accelerometer Layer Selection
-
-![ACC MUX schematic block](docs/Graph/schematic/ACC_MUX.png)
-
-The accelerometer layer is connected through a dedicated FPC interface. A CD74HC154 decoder expands MCU control lines into multiple active-low chip-select signals, allowing the MCU to select individual accelerometer devices on the shared bus.
-
-This structure supports scalable inertial sensing without assigning a separate MCU chip-select pin to every accelerometer.
-
-### USB Power Input and Power Conversion
-
-| USB-B 5 V input | 5 V to 3.3 V conversion |
+| PCB layout | 3D render |
 | --- | --- |
-| ![USB schematic block](docs/Graph/schematic/USB.png) | ![Power converter schematic block](docs/Graph/schematic/POWER_CONVERTER.png) |
+| ![Mainboard PCB](prototype/new/mainbord/2.0/docs/Graph/PCB.png) | ![Mainboard render](prototype/new/mainbord/2.0/docs/Graph/Rendering.png) |
 
-The USB-B connector is currently used as a 5 V power input. It is not intended as the primary STM32 programming interface in this revision; programming is handled through SWD. The board then generates a local 3.3 V rail using an AP2112K-3.3 regulator. The 3.3 V rail powers the MCU and low-voltage digital/signal-processing components. Local decoupling capacitors are placed around the regulator and IC supply pins to reduce supply noise.
+The mainboard is the local control layer for one e-skin module. It is built around an `STM32G474CETx` MCU and provides:
 
-### Module-to-Module Power Link
+- FSR row selection through `CD74HC4067` analog multiplexers.
+- FSR column readout through `MAX11633` ADCs and fixed voltage-divider resistors.
+- ACC-layer device selection through a `CD74HC154` decoder.
+- Local `5 V` to `3.3 V` regulation using `AP2112K-3.3`.
+- SWD programming and debugging.
+- Module-to-module power distribution headers.
 
-![Power link schematic block](docs/Graph/schematic/POWER_M-M.png)
+The complete schematic, functional-block diagrams, PCB files, STEP model, component footprints, and datasheets are documented in [prototype/new/mainbord/2.0](prototype/new/mainbord/2.0).
 
-The module includes simple power-link headers for sharing 5 V and ground across modules in a patch. This allows one module or one patch-level entry point to distribute power to neighbouring modules, while data communication can remain separately defined.
+![Complete mainboard schematic](prototype/new/mainbord/2.0/docs/Graph/schematic/mainboard.png)
 
-## Current Working Principle
+### 2. ACC Layer
 
-1. The board receives 5 V power and generates 3.3 V locally.
-2. The STM32G474 selects one FSR row through the row-scanning MUX.
-3. Pressure on the FSR layer changes the resistance at the selected row-column intersections.
+| PCB layout | 3D render |
+| --- | --- |
+| ![ACC layer PCB](prototype/new/ACC/docs/Graphs/PCB.png) | ![ACC layer render](prototype/new/ACC/docs/Graphs/Rendering.png) |
+
+The accelerometer layer distributes 16 sensing islands across the module surface. Each island contains a `LIS2DH12TR` accelerometer and local passive components. Flexible traces connect the islands to the surrounding structure so that the sensing surface can preserve mechanical compliance.
+
+The ACC layer is designed around:
+
+- Shared SPI communication lines.
+- Individual active-low chip-select control from the mainboard decoder.
+- Interrupt outputs for future event-driven sensing strategies.
+- FPC interfaces for integration with the mainboard.
+- A flexible island layout intended to support tactile and motion experiments.
+
+The ACC schematic, unit schematic, PCB layout, custom footprints, component models, renders, and datasheets are available in [prototype/new/ACC](prototype/new/ACC).
+
+![ACC layer schematic](prototype/new/ACC/docs/Graphs/Schematic_overall.png)
+
+### 3. FSR Array
+
+| PCB layout | 3D render |
+| --- | --- |
+| ![FSR array PCB](prototype/new/FSR-array/docs/Graph/PCB.png) | ![FSR array render](prototype/new/FSR-array/docs/Graph/Rendering.png) |
+
+The FSR layer is a flexible pressure-sensing array. It is designed as a folded structure with two electrode halves. After folding, a pressure-sensitive resistive film can be placed between the orthogonal electrode layers to form a `16 x 16` sensing matrix.
+
+The current FSR-array design includes:
+
+- Two axis-symmetric flexible halves aligned around the fold line.
+- A `40 mm x 40 mm` active sensing region.
+- `16` row electrodes and `16` column electrodes.
+- Mounting holes for repeatable mechanical alignment.
+- A standalone `AFC01-S16FCA-00` FPC mating tail footprint with `0.50 mm` pitch, `16` exposed fingers, and a marked stiffener region.
+
+The FSR schematic, PCB files, separated-layer files, local footprint library, renders, and STEP models are available in [prototype/new/FSR-array](prototype/new/FSR-array).
+
+![FSR array schematic](prototype/new/FSR-array/docs/Graph/Schematic.png)
+
+## Module Operation
+
+1. The mainboard receives `5 V` and generates the local `3.3 V` rail.
+2. The STM32G474 selects one FSR row through the scanning MUX.
+3. Applied pressure changes the resistance at the FSR row-column intersections.
 4. Column divider voltages are sampled by the MAX11633 ADCs.
-5. The ADC conversion results are returned to the MCU.
-6. The MCU can package the scan result, apply future local strategies such as event-driven sensing or compression, and forward data to a higher-level controller.
-7. The MCU can also select and communicate with accelerometer devices through the ACC FPC and decoder block.
+5. ADC conversion results are returned to the module MCU.
+6. The MCU selects and reads ACC-layer devices over the shared bus.
+7. Local firmware can package, filter, compress, or selectively transmit sensor data to a higher-level controller.
 
-## Development Notes
+## Repository Structure
 
-- The mainboard 2.0 design has passed the current schematic, layout, routing, footprint, and documentation review tests.
-- The project is now ready to move into the next hardware stage: designing the ACC layer PCB and the FSR sensing layer.
-- Upcoming work will focus on ACC-layer connector placement, accelerometer routing, FSR electrode geometry, layer-to-mainboard alignment, and final integration across the modular e-skin stack.
+```text
+prototype/new/
+|-- mainbord/2.0/   Current mainboard hardware revision
+|-- ACC/            Distributed accelerometer layer
+|-- FSR-array/      Folded flexible pressure-sensing array
+`-- docs/           Complete module and multi-module renders
+```
+
+Earlier mainboard revisions are preserved under `prototype/new/mainbord/1.0` and `prototype/new/mainbord/1.1` for reference.
+
+## Development Status
+
+This hardware platform remains under active development.
+
+- The first complete mainboard schematic, PCB layout, routing pass, documentation set, and mechanical render have been completed.
+- The ACC-layer PCB architecture, sensing islands, flexible routing concept, and connector structure have been drafted.
+- The folded FSR-array geometry, symmetric electrode layout, active sensing area, and FPC mating-tail concept have been drafted.
+- The next stage is detailed layer integration, manufacturing-rule review, prototype fabrication, calibration, and validation with the programmable simulator.
+
+Future iterations will continue to refine the flexible-layer stack-up, connector placement, pressure-sensitive material interface, module-to-module power distribution, external controller protocol, and embedded sensing strategies.
+
