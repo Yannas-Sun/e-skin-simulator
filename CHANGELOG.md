@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-06-02 - Make Dashboard Grid Snapping Permanent
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Made honeycomb-grid snapping mandatory for dashboard module placement.
+   - Module dragging, grouped movement, and pasted modules now always resolve to the nearest valid honeycomb cell.
+   - Removed the optional free-placement branch so users cannot accidentally leave modules between cells.
+
+2. **[Appearance]** Removed the `Snap` toggle from the dashboard toolbar.
+   - The toolbar now exposes only actions that remain meaningful when edge-aligned module placement is always enabled.
+
 ## 2026-06-02 - Deploy Optional ngspice Electrical Backend
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

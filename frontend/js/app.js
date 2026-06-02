@@ -8,7 +8,6 @@ const state = {
   nextPatchId: 1,
   patches: [],
   activePatchId: null,
-  snap: true,
   drag: null,
   selection: null,
   selectedModules: new Set(),
@@ -69,7 +68,6 @@ function visibleWorldBounds() {
 }
 
 function snapPoint(point) {
-  if (!state.snap) return point;
   const coord = pixelToAxial(point.x, point.y);
   return axialToPixel(coord.q, coord.r);
 }
@@ -1061,10 +1059,6 @@ function setupControls() {
   sizeRange.addEventListener("input", updateSelectedObject);
   massRange.addEventListener("input", updateSelectedObject);
   sampleRange.addEventListener("input", updateSelectedObject);
-  document.getElementById("snapToggle").addEventListener("click", (event) => {
-    state.snap = !state.snap;
-    event.currentTarget.classList.toggle("active", state.snap);
-  });
   document.getElementById("copySelection").addEventListener("click", copySelection);
   document.getElementById("pasteSelection").addEventListener("click", pasteSelection);
   document.getElementById("makePatch").addEventListener("click", makePatchFromSelection);
