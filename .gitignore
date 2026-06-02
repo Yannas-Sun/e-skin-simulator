@@ -3,3 +3,12 @@ __pycache__/
 *.log
 .DS_Store
 Thumbs.db
+
+# Local hardware workspaces and helper tools are maintained outside software pushes.
+prototype/
+tools/
+screenshot/
+
+# Local inspection and generated helper outputs.
+$out
+.codex_*

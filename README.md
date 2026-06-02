@@ -71,19 +71,19 @@ This project is still under active development. The current repository captures 
 
 ## Demo Videos
 
-The repository includes two embedded demo previews to document the current simulator behavior. The original MP4 recordings are kept in `demo/`, while the GIF previews below are used because GitHub README pages do not render repository-hosted MP4 files as inline players.
+The repository includes two embedded demo previews to document the current simulator behavior. The original MP4 recordings are kept in `docs/demo/`, while the GIF previews below are used because GitHub README pages do not render repository-hosted MP4 files as inline players.
 
 ### Programmable FSR Readout Demo
 
 Demonstrates the programmable FSR readout page, including MUX-controlled row scanning, ADC/FIFO-based column readout, MOSI command input, MISO output inspection, and hardware-derived heatmap generation.
 
-<img src="demo/demo2-preview.gif" alt="Programmable FSR readout demo" width="100%">
+<img src="docs/demo/demo2-preview.gif" alt="Programmable FSR readout demo" width="100%">
 
 ### Module Network Dashboard
 
 Demonstrates the modular e-skin dashboard, including honeycomb-style module placement, object interaction, patch-oriented pressure visualization, module identifiers, and data-throughput feedback.
 
-<img src="demo/demo1-preview.gif" alt="Module network dashboard demo" width="100%">
+<img src="docs/demo/demo1-preview.gif" alt="Module network dashboard demo" width="100%">
 
 These videos show the current state of the prototype. The simulator remains in progress, and future videos will be updated as new hardware models, external MCU workflows, scan strategies, and algorithm experiments are added.
 
@@ -141,10 +141,14 @@ software-simulation/
       app.js                   # dashboard interaction, rendering, and API calls
       accelerometer-demo.js    # LIS3DH visualization and MISO-driven heatmap logic
       fsr-demo.js              # FSR visualization and MISO-driven heatmap logic
-  demo/
-    demo1.mp4                  # dashboard workflow demo
-    demo2.mp4                  # programmable FSR readout demo
   docs/
+    datasheets/                # component datasheets used by the virtual hardware models
+    demo/
+      demo1.mp4                # dashboard workflow demo
+      demo2.mp4                # programmable FSR readout demo
+    hardware/                  # module and patch renders used by this README
     references/                # project reports and source PDFs
   CHANGELOG.md                 # ordered record of pushed changes
 ```
+
+Local KiCad prototypes and downloaded helper tools can live beside the simulator under `prototype/` and `tools/`. They are intentionally excluded from software pushes so the repository stays focused on the runnable simulation platform.

@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-06-02 - Organize Software Repository Layout
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Repo]** Kept local hardware workspaces outside software pushes.
+   - `prototype/`, `tools/`, and `screenshot/` are now ignored by Git.
+   - KiCad projects remain available locally without being mixed into the runnable simulator repository.
+
+2. **[Docs]** Consolidated software documentation under `docs/`.
+   - Component PDFs now live under `docs/datasheets/`.
+   - Demo MP4 and GIF files now live under `docs/demo/`, and README preview paths were updated accordingly.
+
+3. **[Cleanup]** Removed generated local artifacts.
+   - Cleared Python caches, empty log files, temporary inspection output, and local screenshots.
+
 ## 2026-05-23 - Add Address-Stepped Accelerometer Scan Animation
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
