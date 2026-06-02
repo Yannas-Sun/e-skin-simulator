@@ -8,6 +8,7 @@ from typing import Any
 
 from .accel_sampler import run_accel_readout, run_lis3dh_spi_program
 from .fsr_sampler import run_adc_mosi_program, run_fsr_readout
+from .ngspice_backend import ngspice_health
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -148,6 +149,12 @@ def compute_throughput(module_count: int, sampling_hz: float) -> dict[str, float
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, directory=str(FRONTEND_ROOT), **kwargs)
+
+    def do_GET(self) -> None:
+        if self.path == "/api/ngspice-health":
+            self.write_json(ngspice_health())
+            return
+        super().do_GET()
 
     def do_POST(self) -> None:
         if self.path == "/api/simulate":

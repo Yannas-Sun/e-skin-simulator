@@ -1,0 +1,11 @@
+* e-skin FSR voltage-divider example
+Vexcitation vin 0 3.3
+Rfsr vin vout 10k
+Rload vout 0 10k
+.op
+.control
+run
+print v(vout)
+quit
+.endc
+.end

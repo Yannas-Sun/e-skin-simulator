@@ -103,6 +103,25 @@ http://127.0.0.1:8000
 
 Use the HTTP address above rather than opening `index.html` directly, because the frontend calls the Python backend API at `/api/simulate`.
 
+## ngspice Electrical Backend
+
+The project includes an optional ngspice adapter for circuit-level simulation. The current deployment uses the official Windows 64-bit ngspice console executable and keeps the downloaded runtime under the ignored local `tools/ngspice/` directory.
+
+Install or verify the local runtime:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File scripts/install_ngspice.ps1
+python scripts/check_ngspice.py
+```
+
+The health endpoint runs a `3.3 V` FSR voltage-divider smoke test through ngspice:
+
+```text
+http://127.0.0.1:8000/api/ngspice-health
+```
+
+The existing interactive FSR demo still uses the fast Python behavioral model. The ngspice adapter is deployed alongside it so circuit-level FSR, resistor, and MUX calculations can be migrated incrementally without making the UI dependent on a slow full-circuit solve.
+
 ## Basic Usage
 
 1. Drag an `e-Skin Module` from the right panel into the workspace.
@@ -132,6 +151,10 @@ software-simulation/
     accel_sampler.py           # programmable LIS3DH scan controller using the virtual hardware
     fsr_hardware.py            # virtual DMUX, ADC, resistor, FSR, and FSR array primitives
     fsr_sampler.py             # programmable scan controller using the virtual hardware
+    ngspice_backend.py         # optional circuit-level ngspice adapter and health check
+  circuits/
+    ngspice/
+      fsr-divider.cir          # standalone FSR voltage-divider smoke-test circuit
   frontend/
     accelerometer-demo.html    # LIS3DH accelerometer-array readout demo
     index.html                 # module-network dashboard
@@ -148,6 +171,9 @@ software-simulation/
       demo2.mp4                # programmable FSR readout demo
     hardware/                  # module and patch renders used by this README
     references/                # project reports and source PDFs
+  scripts/
+    install_ngspice.ps1        # reproducible local Windows ngspice installer
+    check_ngspice.py           # ngspice discovery and divider smoke test
   CHANGELOG.md                 # ordered record of pushed changes
 ```
 

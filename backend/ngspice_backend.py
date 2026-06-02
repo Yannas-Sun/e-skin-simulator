@@ -1,0 +1,139 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import tempfile
+
+
+ROOT = Path(__file__).resolve().parent.parent
+PROJECT_NGSPICE = ROOT / "tools" / "ngspice" / "Spice64" / "bin" / "ngspice_con.exe"
+VOLTAGE_PATTERN = re.compile(r"v\(vout\)\s*=\s*([-+0-9.eE]+)", re.IGNORECASE)
+VERSION_PATTERN = re.compile(r"ngspice-(\d+(?:\.\d+)*)", re.IGNORECASE)
+
+
+class NgSpiceError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class NgSpiceBackend:
+    executable: Path
+
+    @classmethod
+    def discover(cls) -> "NgSpiceBackend | None":
+        candidates = [
+            os.environ.get("NGSPICE_EXECUTABLE"),
+            str(PROJECT_NGSPICE),
+            shutil.which("ngspice_con"),
+            shutil.which("ngspice"),
+        ]
+        for candidate in candidates:
+            if candidate and Path(candidate).is_file():
+                return cls(Path(candidate).resolve())
+        return None
+
+    def version(self) -> str:
+        result = subprocess.run(
+            [str(self.executable), "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        output = f"{result.stdout}\n{result.stderr}"
+        match = VERSION_PATTERN.search(output)
+        if not match:
+            raise NgSpiceError(f"Unable to read ngspice version from {self.executable}")
+        return match.group(1)
+
+    def simulate_voltage_divider(self, vcc: float, fsr_ohms: float, load_ohms: float) -> dict[str, float | str]:
+        if vcc <= 0:
+            raise ValueError("vcc must be positive")
+        if fsr_ohms <= 0 or load_ohms <= 0:
+            raise ValueError("resistance values must be positive")
+
+        deck = f"""* e-skin FSR voltage-divider smoke test
+Vexcitation vin 0 {vcc}
+Rfsr vin vout {fsr_ohms}
+Rload vout 0 {load_ohms}
+.op
+.control
+run
+print v(vout)
+quit
+.endc
+.end
+"""
+        output = self._run_deck(deck)
+        match = VOLTAGE_PATTERN.search(output)
+        if not match:
+            raise NgSpiceError(f"Unable to parse divider voltage from ngspice output:\n{output}")
+
+        voltage = float(match.group(1))
+        expected = vcc * load_ohms / (fsr_ohms + load_ohms)
+        return {
+            "engine": "ngspice",
+            "version": self.version(),
+            "executable": str(self.executable),
+            "vcc": vcc,
+            "fsrOhms": fsr_ohms,
+            "loadOhms": load_ohms,
+            "outputVoltage": voltage,
+            "expectedVoltage": expected,
+            "absoluteError": abs(voltage - expected),
+        }
+
+    def health(self) -> dict[str, object]:
+        divider = self.simulate_voltage_divider(vcc=3.3, fsr_ohms=10_000.0, load_ohms=10_000.0)
+        return {
+            "available": True,
+            "engine": "ngspice",
+            "version": divider["version"],
+            "executable": divider["executable"],
+            "smokeTest": {
+                "circuit": "10 kOhm FSR + 10 kOhm load divider",
+                "outputVoltage": divider["outputVoltage"],
+                "expectedVoltage": divider["expectedVoltage"],
+                "absoluteError": divider["absoluteError"],
+                "passed": float(divider["absoluteError"]) < 1e-9,
+            },
+        }
+
+    def _run_deck(self, deck: str) -> str:
+        with tempfile.TemporaryDirectory(prefix="eskin-ngspice-") as temp_dir:
+            deck_path = Path(temp_dir) / "circuit.cir"
+            deck_path.write_text(deck, encoding="ascii")
+            result = subprocess.run(
+                [str(self.executable), "-b", str(deck_path)],
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=False,
+            )
+        output = f"{result.stdout}\n{result.stderr}"
+        if result.returncode != 0:
+            raise NgSpiceError(f"ngspice exited with code {result.returncode}:\n{output}")
+        return output
+
+
+def ngspice_health() -> dict[str, object]:
+    backend = NgSpiceBackend.discover()
+    if backend is None:
+        return {
+            "available": False,
+            "engine": "ngspice",
+            "error": "ngspice runtime not found. Run scripts/install_ngspice.ps1.",
+        }
+    try:
+        return backend.health()
+    except (NgSpiceError, OSError, subprocess.SubprocessError) as exc:
+        return {
+            "available": False,
+            "engine": "ngspice",
+            "executable": str(backend.executable),
+            "error": str(exc),
+        }

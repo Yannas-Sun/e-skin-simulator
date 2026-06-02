@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-06-02 - Deploy Optional ngspice Electrical Backend
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Feature]** Added an optional ngspice circuit-simulation adapter.
+   - `backend/ngspice_backend.py` discovers the project-local ngspice console runtime or a configured system executable.
+   - The adapter can solve an FSR voltage divider and parse the resulting output-node voltage from ngspice.
+
+2. **[Feature]** Added an ngspice backend health endpoint.
+   - `GET /api/ngspice-health` runs a `3.3 V`, `10 kOhm + 10 kOhm` voltage-divider smoke test.
+   - The response reports the discovered executable, ngspice version, output voltage, expected voltage, and pass state.
+
+3. **[Tooling]** Added reproducible Windows installation and verification scripts.
+   - `scripts/install_ngspice.ps1` downloads the official Windows 64-bit ngspice release into the ignored local `tools/ngspice/` directory.
+   - `scripts/check_ngspice.py` verifies runtime discovery and runs the same circuit-level smoke test from Python.
+   - `circuits/ngspice/fsr-divider.cir` provides a standalone reference deck.
+
+4. **[Docs]** Documented the electrical-backend deployment boundary.
+   - The interactive FSR UI continues to use the fast Python behavioral model for now.
+   - ngspice is deployed alongside it for incremental migration of FSR, resistor, and MUX calculations.
+
 ## 2026-06-02 - Organize Software Repository Layout
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
