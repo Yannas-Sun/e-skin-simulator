@@ -1,23 +1,5 @@
 # Changelog
 
-## 2026-06-03 - Add FSR Hardware Web Documentation Page
-
-Changes are ordered from most important to least important. Each change is labeled with a type.
-
-1. **[Feature]** Added a browser-rendered documentation page for the FSR hardware Markdown.
-   - `frontend/fsr-hardware-doc.html` renders `docs/fsr_hardware_classes.md` as a structured web page with a table of contents.
-   - `frontend/js/markdown-doc.js` converts headings, tables, lists, code blocks, and inline code without relying on external CDN assets.
-
-2. **[Feature]** Exposed documentation files through the Python backend.
-   - `backend/server.py` now serves `/docs/...` as a safe read-only route so frontend pages can load Markdown from the repository documentation folder.
-
-3. **[Appearance]** Added documentation styling and dashboard navigation.
-   - The dashboard toolbar now includes a `Hardware Docs` link.
-   - `frontend/styles.css` includes page, article, table, code block, and table-of-contents styles for documentation pages.
-
-4. **[Repo]** Ignored local Codex runtime state.
-   - `.codex/` is now ignored alongside the existing generated helper outputs.
-
 ## 2026-06-03 - Document FSR Hardware Classes
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

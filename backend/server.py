@@ -16,7 +16,6 @@ from .ngspice_backend import ngspice_health
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_ROOT = ROOT / "frontend"
 MODEL_ROOT = (FRONTEND_ROOT / "assets" / "models").resolve()
-DOCS_ROOT = (ROOT / "docs").resolve()
 MODULE_CHANNELS = 560
 MODULE_METADATA_BYTES = 20
 PATCH_METADATA_BYTES = 20
@@ -161,17 +160,11 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path.startswith("/assets/models/"):
             self.serve_model_asset()
             return
-        if self.path.startswith("/docs/"):
-            self.serve_docs_asset()
-            return
         super().do_GET()
 
     def do_HEAD(self) -> None:
         if self.path.startswith("/assets/models/"):
             self.serve_model_asset(send_body=False)
-            return
-        if self.path.startswith("/docs/"):
-            self.serve_docs_asset(send_body=False)
             return
         super().do_HEAD()
 
@@ -192,24 +185,6 @@ class Handler(SimpleHTTPRequestHandler):
         with requested.open("rb") as handle:
             while chunk := handle.read(1024 * 1024):
                 self.wfile.write(chunk)
-
-    def serve_docs_asset(self, send_body: bool = True) -> None:
-        relative = unquote(self.path.removeprefix("/docs/")).split("?", 1)[0]
-        requested = (DOCS_ROOT / relative).resolve()
-        if not requested.is_file() or not requested.is_relative_to(DOCS_ROOT):
-            self.send_error(404)
-            return
-
-        content_type = mimetypes.guess_type(requested.name)[0] or "text/plain"
-        if requested.suffix == ".md":
-            content_type = "text/markdown; charset=utf-8"
-        data = requested.read_bytes()
-        self.send_response(200)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        if send_body:
-            self.wfile.write(data)
 
     def do_POST(self) -> None:
         if self.path == "/api/simulate":

@@ -142,7 +142,6 @@ The dashboard includes a load-on-demand Fusion OBJ preview for the module model.
    - `Delete` / `Backspace`
 8. Click `FSR Demo` to inspect the hardware readout path for one 16 x 16 FSR layer.
 9. Click `Accel Demo` to inspect the LIS3DH accelerometer-array readout path.
-10. Click `Hardware Docs` to read the rendered FSR hardware class documentation page.
 
 ## Project Structure
 
@@ -164,7 +163,6 @@ software-simulation/
     assets/
       models/                 # Fusion OBJ/MTL module preview assets
     accelerometer-demo.html    # LIS3DH accelerometer-array readout demo
-    fsr-hardware-doc.html      # rendered FSR hardware Markdown documentation
     index.html                 # module-network dashboard
     fsr-demo.html              # FSR readout circuit demo
     styles.css                 # shared UI styling
@@ -174,7 +172,6 @@ software-simulation/
       app.js                   # dashboard interaction, rendering, and API calls
       accelerometer-demo.js    # LIS3DH visualization and MISO-driven heatmap logic
       fsr-demo.js              # FSR visualization and MISO-driven heatmap logic
-      markdown-doc.js          # lightweight Markdown renderer for local docs pages
       module-3d-viewer.js      # dashboard Fusion OBJ preview viewer
   docs/
     datasheets/                # component datasheets used by the virtual hardware models
