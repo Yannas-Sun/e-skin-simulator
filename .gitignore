@@ -11,4 +11,5 @@ screenshot/
 
 # Local inspection and generated helper outputs.
 $out
+.codex/
 .codex_*
