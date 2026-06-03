@@ -175,7 +175,7 @@ def ngspice_health() -> dict[str, object]:
         return {
             "available": False,
             "engine": "ngspice",
-            "error": "ngspice runtime not found. Run scripts/install_ngspice.ps1.",
+            "error": "ngspice runtime not found. Place ngspice_con.exe under tools/ngspice/Spice64/bin/ or set NGSPICE_EXECUTABLE.",
         }
     try:
         return backend.health()

@@ -508,6 +508,72 @@ h2 {
   line-height: 1.65;
 }
 
+.model-preview-card {
+  display: grid;
+  gap: 10px;
+}
+
+.model-viewer {
+  position: relative;
+  min-height: 220px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(47, 123, 99, 0.08), rgba(30, 138, 165, 0.04)),
+    #f8fbf9;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.model-viewer canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.model-viewer:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+  border: 0;
+  border-radius: 0;
+}
+
+.model-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  color: var(--muted);
+  text-align: center;
+  pointer-events: none;
+}
+
+.model-placeholder strong {
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.model-placeholder span {
+  font-size: 0.78rem;
+}
+
+.model-load-button {
+  flex: 1;
+  justify-content: center;
+}
+
+.model-actions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.model-fullscreen-button {
+  flex: 0 0 auto;
+  justify-content: center;
+}
+
 .sim-module polygon.shell {
   fill: rgba(231, 243, 238, 0.94);
   stroke: #2f7b63;

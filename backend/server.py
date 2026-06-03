@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import math
+import mimetypes
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote
 
 from .accel_sampler import run_accel_readout, run_lis3dh_spi_program
 from .fsr_sampler import run_adc_mosi_program, run_fsr_readout
@@ -13,6 +15,7 @@ from .ngspice_backend import ngspice_health
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_ROOT = ROOT / "frontend"
+MODEL_ROOT = (FRONTEND_ROOT / "assets" / "models").resolve()
 MODULE_CHANNELS = 560
 MODULE_METADATA_BYTES = 20
 PATCH_METADATA_BYTES = 20
@@ -154,7 +157,34 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/api/ngspice-health":
             self.write_json(ngspice_health())
             return
+        if self.path.startswith("/assets/models/"):
+            self.serve_model_asset()
+            return
         super().do_GET()
+
+    def do_HEAD(self) -> None:
+        if self.path.startswith("/assets/models/"):
+            self.serve_model_asset(send_body=False)
+            return
+        super().do_HEAD()
+
+    def serve_model_asset(self, send_body: bool = True) -> None:
+        relative = unquote(self.path.removeprefix("/assets/models/")).split("?", 1)[0]
+        requested = (MODEL_ROOT / relative).resolve()
+        if not requested.is_file() or not requested.is_relative_to(MODEL_ROOT):
+            self.send_error(404)
+            return
+
+        content_type = mimetypes.guess_type(requested.name)[0] or "application/octet-stream"
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(requested.stat().st_size))
+        self.end_headers()
+        if not send_body:
+            return
+        with requested.open("rb") as handle:
+            while chunk := handle.read(1024 * 1024):
+                self.wfile.write(chunk)
 
     def do_POST(self) -> None:
         if self.path == "/api/simulate":

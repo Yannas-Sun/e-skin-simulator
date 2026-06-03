@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-06-03 - Add Dashboard Fusion 3D Model Preview
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Feature]** Added a load-on-demand Fusion OBJ preview to the dashboard.
+   - The right panel now includes a `Fusion 3D Model` card with load and fullscreen controls.
+   - `frontend/js/module-3d-viewer.js` loads `Module.obj` and `Module.mtl` through Three.js with orbit controls, auto-rotation, and responsive resizing.
+
+2. **[Feature]** Added static serving for model assets.
+   - `backend/server.py` now serves files under `/assets/models/` with safe path resolution, MIME detection, and `HEAD` support.
+
+3. **[Repo]** Added Git LFS tracking for large Fusion OBJ model assets.
+   - `.gitattributes` tracks `frontend/assets/models/*.obj` through Git LFS so the 3D export can be pushed without exceeding GitHub's normal file-size limit.
+   - Added the Fusion `Module.obj` and `Module.mtl` preview assets.
+
+4. **[Dependency]** Vendored the minimal Three.js modules needed by the viewer.
+   - Added `three.module.js`, `OrbitControls.js`, `MTLLoader.js`, and `OBJLoader.js` under `frontend/vendor/three/`.
+   - The dashboard import map points to these local files instead of a CDN.
+
+5. **[Cleanup]** Removed the old ngspice helper scripts and updated documentation.
+   - Deleted `scripts/install_ngspice.ps1` and `scripts/check_ngspice.py`.
+   - README and backend error text now describe direct runtime discovery via `NGSPICE_EXECUTABLE`, project-local `tools/ngspice`, or `PATH`.
+
 ## 2026-06-03 - Connect ngspice to the FSR Readout Path
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

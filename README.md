@@ -107,12 +107,11 @@ Use the HTTP address above rather than opening `index.html` directly, because th
 
 The project includes an optional ngspice adapter for circuit-level simulation. The current deployment uses the official Windows 64-bit ngspice console executable and keeps the downloaded runtime under the ignored local `tools/ngspice/` directory.
 
-Install or verify the local runtime:
+The backend discovers ngspice in this order:
 
-```powershell
-powershell.exe -ExecutionPolicy Bypass -File scripts/install_ngspice.ps1
-python scripts/check_ngspice.py
-```
+1. `NGSPICE_EXECUTABLE`
+2. `tools/ngspice/Spice64/bin/ngspice_con.exe`
+3. `ngspice_con` or `ngspice` on `PATH`
 
 The health endpoint runs a `3.3 V` FSR voltage-divider smoke test through ngspice:
 
@@ -121,6 +120,10 @@ http://127.0.0.1:8000/api/ngspice-health
 ```
 
 The interactive FSR demo now uses ngspice for the selected-row electrical network. For each scanned row, Python computes the current FSR resistance values, ngspice solves the row source, MUX on-resistance, 16 FSRs, and 16 load resistors, then the Python MAX11632 model converts those node voltages into FIFO and MISO words. The dashboard-level module heatmap still uses the fast Python pressure model.
+
+## Fusion 3D Model Preview
+
+The dashboard includes a load-on-demand Fusion OBJ preview for the module model. The large `Module.obj` asset is tracked with Git LFS through `.gitattributes`, while the viewer uses a small vendored Three.js subset so the preview works without a CDN.
 
 ## Basic Usage
 
@@ -157,14 +160,19 @@ software-simulation/
       fsr-divider.cir          # standalone FSR voltage-divider smoke-test circuit
       fsr-selected-row.cir     # selected-row FSR network with MUX on-resistance and 16 load dividers
   frontend/
+    assets/
+      models/                 # Fusion OBJ/MTL module preview assets
     accelerometer-demo.html    # LIS3DH accelerometer-array readout demo
     index.html                 # module-network dashboard
     fsr-demo.html              # FSR readout circuit demo
     styles.css                 # shared UI styling
+    vendor/
+      three/                   # vendored Three.js modules used by the OBJ viewer
     js/
       app.js                   # dashboard interaction, rendering, and API calls
       accelerometer-demo.js    # LIS3DH visualization and MISO-driven heatmap logic
       fsr-demo.js              # FSR visualization and MISO-driven heatmap logic
+      module-3d-viewer.js      # dashboard Fusion OBJ preview viewer
   docs/
     datasheets/                # component datasheets used by the virtual hardware models
     demo/
@@ -172,9 +180,6 @@ software-simulation/
       demo2.mp4                # programmable FSR readout demo
     hardware/                  # module and patch renders used by this README
     references/                # project reports and source PDFs
-  scripts/
-    install_ngspice.ps1        # reproducible local Windows ngspice installer
-    check_ngspice.py           # ngspice discovery and divider smoke test
   CHANGELOG.md                 # ordered record of pushed changes
 ```
 

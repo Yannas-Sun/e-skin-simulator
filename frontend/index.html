@@ -125,6 +125,23 @@
           </div>
         </div>
 
+        <div class="panel-section model-preview-card">
+          <div class="section-title">
+            <h2>Fusion 3D Model</h2>
+            <span id="modelState">not loaded</span>
+          </div>
+          <div id="moduleModelViewer" class="model-viewer" aria-label="Fusion 360 module OBJ preview">
+            <div class="model-placeholder">
+              <strong>Module.obj</strong>
+              <span>Click to load the Fusion export.</span>
+            </div>
+          </div>
+          <div class="model-actions">
+            <button id="loadModuleModel" class="text-button model-load-button" type="button">Load 3D Model</button>
+            <button id="fullscreenModuleModel" class="text-button model-fullscreen-button" type="button">Fullscreen</button>
+          </div>
+        </div>
+
         <div class="panel-section">
           <div class="section-title">
             <h2>Test Objects</h2>
@@ -184,5 +201,14 @@
     </main>
 
     <script src="js/app.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "/vendor/three/build/three.module.js",
+          "three/addons/": "/vendor/three/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module" src="js/module-3d-viewer.js"></script>
   </body>
 </html>
