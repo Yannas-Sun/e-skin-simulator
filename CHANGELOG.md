@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-06-03 - Connect ngspice to the FSR Readout Path
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Connected ngspice to the interactive FSR row readout path.
+   - `FSRArray.read_row()` now solves the selected row through ngspice before the Python MAX11632 model performs SAR conversion, FIFO storage, and MISO readback.
+   - The solved electrical network includes the selected row source, MUX on-resistance, 16 FSR resistors, and 16 column load resistors to ground.
+
+2. **[Performance]** Cached repeated ngspice row solves and avoided unnecessary electrical solves during transfer-count statistics.
+   - Repeated row resistance patterns reuse cached ngspice output.
+   - MCU line-rate statistics now count protocol events directly instead of re-solving analog voltages.
+
+3. **[Appearance]** Exposed the active electrical solver in the FSR demo SPI frame panel.
+   - The page now reports whether the scan used `ngspice` or the Python fallback.
+
+4. **[Docs]** Updated the ngspice documentation boundary.
+   - Added `circuits/ngspice/fsr-selected-row.cir` as a standalone selected-row reference deck.
+   - Clarified that the FSR demo uses ngspice for row voltages while ADC/FIFO/SPI remain Python hardware models.
+
 ## 2026-06-02 - Make Dashboard Grid Snapping Permanent
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

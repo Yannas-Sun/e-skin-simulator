@@ -120,7 +120,7 @@ The health endpoint runs a `3.3 V` FSR voltage-divider smoke test through ngspic
 http://127.0.0.1:8000/api/ngspice-health
 ```
 
-The existing interactive FSR demo still uses the fast Python behavioral model. The ngspice adapter is deployed alongside it so circuit-level FSR, resistor, and MUX calculations can be migrated incrementally without making the UI dependent on a slow full-circuit solve.
+The interactive FSR demo now uses ngspice for the selected-row electrical network. For each scanned row, Python computes the current FSR resistance values, ngspice solves the row source, MUX on-resistance, 16 FSRs, and 16 load resistors, then the Python MAX11632 model converts those node voltages into FIFO and MISO words. The dashboard-level module heatmap still uses the fast Python pressure model.
 
 ## Basic Usage
 
@@ -155,6 +155,7 @@ software-simulation/
   circuits/
     ngspice/
       fsr-divider.cir          # standalone FSR voltage-divider smoke-test circuit
+      fsr-selected-row.cir     # selected-row FSR network with MUX on-resistance and 16 load dividers
   frontend/
     accelerometer-demo.html    # LIS3DH accelerometer-array readout demo
     index.html                 # module-network dashboard

@@ -1,0 +1,43 @@
+* e-skin selected-row FSR network example
+* One DMUX-selected row feeds 16 FSR/load-divider column nodes.
+Vrow vin 0 3.3
+Rmux vin rowline 70
+Rfsr1 rowline c1 10000
+Rload1 c1 0 10000
+Rfsr2 rowline c2 10000
+Rload2 c2 0 10000
+Rfsr3 rowline c3 10000
+Rload3 c3 0 10000
+Rfsr4 rowline c4 10000
+Rload4 c4 0 10000
+Rfsr5 rowline c5 10000
+Rload5 c5 0 10000
+Rfsr6 rowline c6 10000
+Rload6 c6 0 10000
+Rfsr7 rowline c7 10000
+Rload7 c7 0 10000
+Rfsr8 rowline c8 10000
+Rload8 c8 0 10000
+Rfsr9 rowline c9 10000
+Rload9 c9 0 10000
+Rfsr10 rowline c10 10000
+Rload10 c10 0 10000
+Rfsr11 rowline c11 10000
+Rload11 c11 0 10000
+Rfsr12 rowline c12 10000
+Rload12 c12 0 10000
+Rfsr13 rowline c13 10000
+Rload13 c13 0 10000
+Rfsr14 rowline c14 10000
+Rload14 c14 0 10000
+Rfsr15 rowline c15 10000
+Rload15 c15 0 10000
+Rfsr16 rowline c16 10000
+Rload16 c16 0 10000
+.op
+.control
+run
+print v(c1) v(c2) v(c3) v(c4) v(c5) v(c6) v(c7) v(c8) v(c9) v(c10) v(c11) v(c12) v(c13) v(c14) v(c15) v(c16)
+quit
+.endc
+.end

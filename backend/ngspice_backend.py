@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 import os
 from pathlib import Path
 import re
@@ -12,6 +13,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parent.parent
 PROJECT_NGSPICE = ROOT / "tools" / "ngspice" / "Spice64" / "bin" / "ngspice_con.exe"
 VOLTAGE_PATTERN = re.compile(r"v\(vout\)\s*=\s*([-+0-9.eE]+)", re.IGNORECASE)
+NODE_VOLTAGE_PATTERN = re.compile(r"v\(c(\d+)\)\s*=\s*([-+0-9.eE]+)", re.IGNORECASE)
 VERSION_PATTERN = re.compile(r"ngspice-(\d+(?:\.\d+)*)", re.IGNORECASE)
 
 
@@ -37,6 +39,9 @@ class NgSpiceBackend:
         return None
 
     def version(self) -> str:
+        return _ngspice_version(str(self.executable))
+
+    def _read_version(self) -> str:
         result = subprocess.run(
             [str(self.executable), "--version"],
             capture_output=True,
@@ -85,6 +90,50 @@ quit
             "outputVoltage": voltage,
             "expectedVoltage": expected,
             "absoluteError": abs(voltage - expected),
+        }
+
+    def simulate_fsr_row(
+        self,
+        row_voltage: float,
+        fsr_ohms: list[float],
+        load_ohms: float,
+        mux_on_ohms: float = 70.0,
+    ) -> dict[str, object]:
+        if load_ohms <= 0:
+            raise ValueError("load_ohms must be positive")
+        if mux_on_ohms < 0:
+            raise ValueError("mux_on_ohms must be non-negative")
+        if not fsr_ohms:
+            raise ValueError("fsr_ohms must not be empty")
+        if any(value <= 0 for value in fsr_ohms):
+            raise ValueError("all FSR resistance values must be positive")
+        if row_voltage <= 0:
+            return {
+                "engine": "ngspice",
+                "version": self.version(),
+                "executable": str(self.executable),
+                "rowVoltage": row_voltage,
+                "loadOhms": load_ohms,
+                "muxOnOhms": mux_on_ohms,
+                "nodeVoltages": [0.0 for _ in fsr_ohms],
+            }
+
+        rounded_fsr = tuple(round(float(value), 6) for value in fsr_ohms)
+        node_voltages = _simulate_fsr_row_cached(
+            executable=str(self.executable),
+            row_voltage=round(float(row_voltage), 9),
+            fsr_ohms=rounded_fsr,
+            load_ohms=round(float(load_ohms), 6),
+            mux_on_ohms=round(float(mux_on_ohms), 6),
+        )
+        return {
+            "engine": "ngspice",
+            "version": self.version(),
+            "executable": str(self.executable),
+            "rowVoltage": row_voltage,
+            "loadOhms": load_ohms,
+            "muxOnOhms": mux_on_ohms,
+            "nodeVoltages": list(node_voltages),
         }
 
     def health(self) -> dict[str, object]:
@@ -137,3 +186,49 @@ def ngspice_health() -> dict[str, object]:
             "executable": str(backend.executable),
             "error": str(exc),
         }
+
+
+@lru_cache(maxsize=512)
+def _simulate_fsr_row_cached(
+    executable: str,
+    row_voltage: float,
+    fsr_ohms: tuple[float, ...],
+    load_ohms: float,
+    mux_on_ohms: float,
+) -> tuple[float, ...]:
+    deck_lines = [
+        "* e-skin selected-row FSR network",
+        f"Vrow vin 0 {row_voltage}",
+        f"Rmux vin rowline {max(mux_on_ohms, 1e-6)}",
+    ]
+    for index, resistance in enumerate(fsr_ohms, start=1):
+        deck_lines.extend(
+            [
+                f"Rfsr{index} rowline c{index} {resistance}",
+                f"Rload{index} c{index} 0 {load_ohms}",
+            ]
+        )
+    deck_lines.extend(
+        [
+            ".op",
+            ".control",
+            "run",
+            "print " + " ".join(f"v(c{index})" for index in range(1, len(fsr_ohms) + 1)),
+            "quit",
+            ".endc",
+            ".end",
+        ]
+    )
+    backend = NgSpiceBackend(Path(executable))
+    output = backend._run_deck("\n".join(deck_lines) + "\n")
+    values: dict[int, float] = {}
+    for match in NODE_VOLTAGE_PATTERN.finditer(output):
+        values[int(match.group(1))] = float(match.group(2))
+    if len(values) != len(fsr_ohms):
+        raise NgSpiceError(f"Unable to parse all FSR row node voltages from ngspice output:\n{output}")
+    return tuple(values[index] for index in range(1, len(fsr_ohms) + 1))
+
+
+@lru_cache(maxsize=8)
+def _ngspice_version(executable: str) -> str:
+    return NgSpiceBackend(Path(executable))._read_version()

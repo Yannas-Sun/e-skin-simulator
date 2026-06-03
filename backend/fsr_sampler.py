@@ -59,12 +59,14 @@ class FSRReadoutProgram:
                     "force": node["force"],
                     "fsrOhms": node["fsrOhms"],
                     "loadOhms": node["loadOhms"],
+                    "muxOnOhms": node["muxOnOhms"],
                     "nodeVoltage": node["nodeVoltage"],
                     "code": sample["code"],
                     "doutWord": sample["doutWord"],
                     "doutBinary": sample["doutBinary"],
                     "doutBytes": sample["doutBytes"],
                     "active": node["active"],
+                    "solver": node["solver"],
                 }
             )
         idle_voltage = self.array.divider_voltage(self.array.vcc, self.array.fsr.resistance(0.0))
@@ -104,6 +106,12 @@ class FSRReadoutProgram:
             },
             "dmuxRows": row_states,
             "columns": columns,
+            "electricalSolver": {
+                "engine": self.array.last_solver,
+                "detail": self.array.last_solver_detail,
+                "muxOnOhms": self.array.mux_on_ohms,
+                "loadOhms": self.array.load.ohms,
+            },
             "adc": {
                 "channels": self.adc.channels,
                 "bits": self.adc.bits,
@@ -164,19 +172,10 @@ class FSRReadoutProgram:
     def mcu_statistics(self, pressed_row: int, pressed_col: int, object_size: float, object_mass: float) -> dict:
         counter = MCUTransferCounter(adc_bits=self.adc.bits)
         saved_row = self.dmux.selected_row
+        command = self.adc.scan_command(start_channel=15, scan_mode=0b00, x_bit=0)
+        fifo_words = [0 for _ in range(self.adc.channels)]
         for row in range(1, self.dmux.outputs + 1):
             self.dmux.set_selected_row(row)
-            nodes = self.array.read_row(
-                dmux=self.dmux,
-                pressed_row=pressed_row,
-                pressed_col=pressed_col,
-                object_size=object_size,
-                object_mass=object_mass,
-            )
-            command = self.adc.scan_command(start_channel=15, scan_mode=0b00, x_bit=0)
-            self.adc.start_scan([node["nodeVoltage"] for node in nodes], command=command)
-            words = [sample["code"] for sample in self.adc.read_fifo()]
-            fifo_words = [sample["doutWord"] for sample in self.adc.read_fifo()]
             counter.record_row(
                 row=row,
                 address_bits=self.dmux.address_bits,

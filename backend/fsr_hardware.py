@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .ngspice_backend import NgSpiceBackend, NgSpiceError
+
 
 VCC = 3.3
 ADC_BITS = 12
@@ -622,12 +624,24 @@ class SPIBus:
 class FSRArray:
     """16 x 16 FSR matrix with column load resistors to ground."""
 
-    def __init__(self, rows: int = 16, cols: int = 16, load_ohms: float = 10_000.0, vcc: float = VCC) -> None:
+    def __init__(
+        self,
+        rows: int = 16,
+        cols: int = 16,
+        load_ohms: float = 10_000.0,
+        vcc: float = VCC,
+        use_ngspice: bool = True,
+        mux_on_ohms: float = 70.0,
+    ) -> None:
         self.rows = rows
         self.cols = cols
         self.vcc = vcc
         self.load = Resistor(load_ohms)
         self.fsr = FSR()
+        self.use_ngspice = use_ngspice
+        self.mux_on_ohms = mux_on_ohms
+        self.last_solver = "python"
+        self.last_solver_detail = "closed-form voltage divider"
 
     def force_at(self, row: int, col: int, pressed_row: int, pressed_col: int, object_size: float, object_mass: float) -> float:
         peak_force = max(0.0, min(100.0, object_mass / 10.0))
@@ -646,14 +660,38 @@ class FSRArray:
             return 0.0
         return row_voltage * (self.load.ohms / (fsr_ohms + self.load.ohms))
 
+    def solve_row_voltages(self, row_voltage: float, fsr_values: list[float]) -> tuple[list[float], str, str]:
+        if row_voltage <= 0:
+            return [0.0 for _ in fsr_values], "python", "unselected row tied to GND"
+        if self.use_ngspice:
+            backend = NgSpiceBackend.discover()
+            if backend is not None:
+                try:
+                    result = backend.simulate_fsr_row(
+                        row_voltage=row_voltage,
+                        fsr_ohms=fsr_values,
+                        load_ohms=self.load.ohms,
+                        mux_on_ohms=self.mux_on_ohms,
+                    )
+                    return list(result["nodeVoltages"]), "ngspice", "selected row network solved by ngspice"
+                except (NgSpiceError, OSError, ValueError):
+                    pass
+        return [self.divider_voltage(row_voltage, resistance) for resistance in fsr_values], "python", "closed-form voltage divider fallback"
+
     def read_row(self, dmux: DMUX, pressed_row: int, pressed_col: int, object_size: float, object_mass: float) -> list[dict[str, int | float | bool]]:
         row = dmux.selected_row
         row_voltage = dmux.row_voltage(row)
         readings: list[dict[str, int | float | bool]] = []
+        forces: list[float] = []
+        resistances: list[float] = []
         for col in range(1, self.cols + 1):
             force = self.force_at(row, col, pressed_row, pressed_col, object_size, object_mass)
-            resistance = self.fsr.resistance(force)
-            voltage = self.divider_voltage(row_voltage, resistance)
+            forces.append(force)
+            resistances.append(self.fsr.resistance(force))
+        voltages, solver, solver_detail = self.solve_row_voltages(row_voltage, resistances)
+        self.last_solver = solver
+        self.last_solver_detail = solver_detail
+        for col, force, resistance, voltage in zip(range(1, self.cols + 1), forces, resistances, voltages):
             readings.append(
                 {
                     "row": row,
@@ -661,8 +699,10 @@ class FSRArray:
                     "force": force,
                     "fsrOhms": resistance,
                     "loadOhms": self.load.ohms,
+                    "muxOnOhms": self.mux_on_ohms,
                     "nodeVoltage": voltage,
                     "active": force > 0,
+                    "solver": solver,
                 }
             )
         return readings

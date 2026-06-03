@@ -224,6 +224,7 @@ function drawCircuit() {
   const uplinkRates = uplink.lineRates;
   const spiLines = [
     `Internal ADC SPI, ADC -> STM32G474`,
+    `ELECTRICAL_SOLVER = ${demo.hardware.electricalSolver?.engine || "python"} (${demo.hardware.electricalSolver?.detail || "closed-form voltage divider"})`,
     `REFRESH = ${demo.hardware.mcu.framesPerSecond.toFixed(0)} full 16x16 frame/s`,
     `COUNTED = ${demo.hardware.mcu.rowsCounted} row scans/frame`,
     ``,
