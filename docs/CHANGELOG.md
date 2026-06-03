@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-06-03 - Hardware Repository Home Restructure
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Repo]** Moved the active `prototype/new` hardware contents to the repository root.
+   - `ACC`, `FSR-array`, `mainbord`, `docs`, and `.gitignore` now appear directly on the hardware branch homepage.
+   - Removed the extra `prototype/new` nesting from the tracked repository layout.
+
+2. **[Documentation]** Moved the hardware changelog into `docs/CHANGELOG.md`.
+   - The branch homepage now stays focused on the hardware module overview and design folders.
+   - Historical change records remain available from the root README.
+
+3. **[Documentation]** Reworked the root README for the new folder layout.
+   - Updated all image and folder links from `prototype/new/...` to the new root-level paths.
+   - Added direct links to the mainboard, ACC, and FSR documentation pages.
+
+4. **[Documentation]** Added illustrated README files for the ACC and FSR layers.
+   - `ACC/README.md` describes the distributed accelerometer island architecture, shared-bus selection method, and readout principle.
+   - `FSR-array/README.md` describes the folded passive pressure matrix, row-column scan principle, and relationship to the mainboard MUX/ADC circuits.
+
 ## 2026-05-25 - README Development Status Update
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

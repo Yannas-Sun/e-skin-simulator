@@ -1,116 +1,96 @@
-# Modular Multi-Layer Electronic Skin
+# Modular Multi-Layer Electronic Skin Hardware
 
-This repository documents an in-progress modular electronic-skin platform for robotic tactile sensing and feedback. Each hexagonal module combines a local control board, a distributed accelerometer layer, and a pressure-sensitive FSR array. Multiple modules can be assembled into a larger patch while preserving a repeatable mechanical and electrical interface.
+This branch documents the current hardware design for a modular multi-layer electronic-skin platform for robotic tactile sensing and feedback. Each module combines a local STM32G474-based mainboard, a distributed accelerometer layer, and a flexible FSR pressure-sensing layer. The system is designed around a hierarchical **host - patch - module** architecture, where each module can locally scan, synchronize, package, and later encode sensor data before forwarding it to a higher-level controller or FPGA.
 
-The current hardware iteration is designed around a hierarchical **host - patch - module** architecture. Each module contains its own STM32G474 MCU so that scanning, synchronization, data packaging, and future local encoding strategies can be developed close to the sensors before data is forwarded to a higher-level controller or FPGA.
+The hardware remains under active development. This branch is organized as a hardware-first repository view: the active design folders are placed directly at the repository root, while the change history is kept under [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
 ## Module Overview
 
-![Complete multi-layer e-skin module render](prototype/new/docs/Rendering.png)
+![Complete multi-layer e-skin module render](docs/Rendering.png)
 
-The module is built as a compact stack:
+The current module stack contains three main hardware layers:
 
-1. **Mainboard:** local STM32G474 control, power conversion, FSR scanning interfaces, ADC readout, and ACC-layer selection.
-2. **ACC layer:** a distributed accelerometer layer with 16 sensing islands connected through flexible traces.
-3. **FSR array:** a folded flexible pressure-sensing structure with orthogonal electrode layers and a connector tail.
+1. **Mainboard:** local STM32G474 control, power conversion, FSR row scanning, ADC readout, ACC-layer selection, and external host/patch communication.
+2. **ACC layer:** a distributed accelerometer array with 16 sensor islands connected through flexible traces and selected through a shared bus plus decoded chip-select lines.
+3. **FSR array:** a folded flexible pressure-sensing structure with orthogonal row and column electrodes for a `16 x 16` tactile matrix.
 
-## Multi-Module Demo
+## Multi-Module Concept
 
-![Five-module e-skin patch render](prototype/new/docs/DEMO.png)
+![Five-module e-skin patch render](docs/DEMO.png)
 
-The five-module render demonstrates the intended patch-level deployment. The hexagonal geometry supports repeatable tiling while each module remains independently serviceable. This structure is intended to scale toward synchronized multi-module sensing, local data aggregation, event-driven acquisition, and future VAE-based encoding experiments.
+The five-module render shows the intended patch-level deployment. The module geometry supports repeatable tiling while keeping each unit independently serviceable. This supports future experiments in synchronized multi-module sensing, local data aggregation, event-driven acquisition, and VAE-based tactile encoding.
 
-## Hardware Layers
+## Hardware Folders
 
-### 1. Mainboard
+| Layer | Folder | Preview |
+| --- | --- | --- |
+| Mainboard | [mainbord/2.0](mainbord/2.0) | ![Mainboard render](mainbord/2.0/docs/Graph/Rendering.png) |
+| ACC layer | [ACC](ACC) | ![ACC render](ACC/docs/Graphs/Rendering.png) |
+| FSR array | [FSR-array](FSR-array) | ![FSR render](FSR-array/docs/Graph/Rendering.png) |
 
-| PCB layout | 3D render |
-| --- | --- |
-| ![Mainboard PCB](prototype/new/mainbord/2.0/docs/Graph/PCB.png) | ![Mainboard render](prototype/new/mainbord/2.0/docs/Graph/Rendering.png) |
+### Mainboard
 
-The mainboard is the local control layer for one e-skin module. It is built around an `STM32G474CETx` MCU and provides:
+The mainboard is the local control layer for one e-skin module. It uses an `STM32G474CETx` MCU to coordinate pressure scanning, ADC command/readout, accelerometer selection, local power management, and future module-level data processing.
 
-- FSR row selection through `CD74HC4067` analog multiplexers.
-- FSR column readout through `MAX11633` ADCs and fixed voltage-divider resistors.
-- ACC-layer device selection through a `CD74HC154` decoder.
-- Local `5 V` to `3.3 V` regulation using `AP2112K-3.3`.
-- SWD programming and debugging.
-- Module-to-module power distribution headers.
+Key blocks:
 
-The complete schematic, functional-block diagrams, PCB files, STEP model, component footprints, and datasheets are documented in [prototype/new/mainbord/2.0](prototype/new/mainbord/2.0).
+- `STM32G474CETx` local module MCU.
+- `CD74HC4067` row-scanning MUX blocks for the FSR layer.
+- `MAX11633` ADC readout for FSR column divider voltages.
+- `CD74HC154` decoder for accelerometer chip-select expansion.
+- `AP2112K-3.3` local 3.3 V regulation from a 5 V input.
+- SWD programming/debug interface and module-to-module power headers.
 
-![Complete mainboard schematic](prototype/new/mainbord/2.0/docs/Graph/schematic/mainboard.png)
+Full documentation: [mainbord/2.0/README.md](mainbord/2.0/README.md)
 
-### 2. ACC Layer
+![Complete mainboard schematic](mainbord/2.0/docs/Graph/schematic/mainboard.png)
 
-| PCB layout | 3D render |
-| --- | --- |
-| ![ACC layer PCB](prototype/new/ACC/docs/Graphs/PCB.png) | ![ACC layer render](prototype/new/ACC/docs/Graphs/Rendering.png) |
+### ACC Layer
 
-The accelerometer layer distributes 16 sensing islands across the module surface. Each island contains a `LIS2DH12TR` accelerometer and local passive components. Flexible traces connect the islands to the surrounding structure so that the sensing surface can preserve mechanical compliance.
+The accelerometer layer distributes 16 inertial sensing islands across the module surface. The design uses shared SPI-style communication lines and individually decoded active-low chip-select signals so the mainboard MCU can select and read one accelerometer at a time without dedicating one MCU pin per sensor.
 
-The ACC layer is designed around:
+Full documentation: [ACC/README.md](ACC/README.md)
 
-- Shared SPI communication lines.
-- Individual active-low chip-select control from the mainboard decoder.
-- Interrupt outputs for future event-driven sensing strategies.
-- FPC interfaces for integration with the mainboard.
-- A flexible island layout intended to support tactile and motion experiments.
+![ACC overall schematic](ACC/docs/Graphs/Schematic_overall.png)
 
-The ACC schematic, unit schematic, PCB layout, custom footprints, component models, renders, and datasheets are available in [prototype/new/ACC](prototype/new/ACC).
+### FSR Array
 
-![ACC layer schematic](prototype/new/ACC/docs/Graphs/Schematic_overall.png)
+The FSR layer is a flexible folded pressure-sensing array. Two mirrored electrode halves are folded together with pressure-sensitive resistive material between them, forming a compact `16 x 16` pressure matrix that can be scanned by the mainboard MUX and ADC circuits.
 
-### 3. FSR Array
+Full documentation: [FSR-array/README.md](FSR-array/README.md)
 
-| PCB layout | 3D render |
-| --- | --- |
-| ![FSR array PCB](prototype/new/FSR-array/docs/Graph/PCB.png) | ![FSR array render](prototype/new/FSR-array/docs/Graph/Rendering.png) |
-
-The FSR layer is a flexible pressure-sensing array. It is designed as a folded structure with two electrode halves. After folding, a pressure-sensitive resistive film can be placed between the orthogonal electrode layers to form a `16 x 16` sensing matrix.
-
-The current FSR-array design includes:
-
-- Two axis-symmetric flexible halves aligned around the fold line.
-- A `40 mm x 40 mm` active sensing region.
-- `16` row electrodes and `16` column electrodes.
-- Mounting holes for repeatable mechanical alignment.
-- A standalone `AFC01-S16FCA-00` FPC mating tail footprint with `0.50 mm` pitch, `16` exposed fingers, and a marked stiffener region.
-
-The FSR schematic, PCB files, separated-layer files, local footprint library, renders, and STEP models are available in [prototype/new/FSR-array](prototype/new/FSR-array).
-
-![FSR array schematic](prototype/new/FSR-array/docs/Graph/Schematic.png)
+![FSR array schematic](FSR-array/docs/Graph/Schematic.png)
 
 ## Module Operation
 
-1. The mainboard receives `5 V` and generates the local `3.3 V` rail.
-2. The STM32G474 selects one FSR row through the scanning MUX.
-3. Applied pressure changes the resistance at the FSR row-column intersections.
-4. Column divider voltages are sampled by the MAX11633 ADCs.
-5. ADC conversion results are returned to the module MCU.
-6. The MCU selects and reads ACC-layer devices over the shared bus.
-7. Local firmware can package, filter, compress, or selectively transmit sensor data to a higher-level controller.
+1. The module receives `5 V` power and generates a local `3.3 V` rail.
+2. The STM32G474 selects one FSR row through the row-scanning MUX.
+3. Pressure on the FSR layer changes the row-column intersection resistance.
+4. Column divider voltages are converted by the MAX11633 ADC.
+5. ADC conversion results are returned to the MCU.
+6. The MCU selects ACC devices through the decoder and reads inertial data over the shared bus.
+7. Local firmware can filter, compress, encode, or selectively transmit sensor data to a patch-level controller or FPGA.
 
 ## Repository Structure
 
 ```text
-prototype/new/
-|-- mainbord/2.0/   Current mainboard hardware revision
-|-- ACC/            Distributed accelerometer layer
-|-- FSR-array/      Folded flexible pressure-sensing array
-`-- docs/           Complete module and multi-module renders
+.
+|-- ACC/              Distributed accelerometer layer
+|-- FSR-array/        Folded flexible pressure-sensing array
+|-- mainbord/
+|   |-- 1.0/          Earlier mainboard revision
+|   |-- 1.1/          Earlier mainboard revision
+|   `-- 2.0/          Current mainboard hardware revision
+|-- docs/
+|   |-- CHANGELOG.md  Hardware branch history
+|   |-- DEMO.png      Multi-module patch concept render
+|   `-- Rendering.png Complete module render
+`-- README.md         Hardware overview
 ```
-
-Earlier mainboard revisions are preserved under `prototype/new/mainbord/1.0` and `prototype/new/mainbord/1.1` for reference.
 
 ## Development Status
 
-This hardware platform remains under active development.
-
-- The first complete mainboard schematic, PCB layout, routing pass, documentation set, and mechanical render have been completed.
-- The ACC-layer PCB architecture, sensing islands, flexible routing concept, and connector structure have been drafted.
-- The folded FSR-array geometry, symmetric electrode layout, active sensing area, and FPC mating-tail concept have been drafted.
-- The next stage is detailed layer integration, manufacturing-rule review, prototype fabrication, calibration, and validation with the programmable simulator.
-
-Future iterations will continue to refine the flexible-layer stack-up, connector placement, pressure-sensitive material interface, module-to-module power distribution, external controller protocol, and embedded sensing strategies.
-
+- The mainboard 2.0 schematic, PCB layout, routing pass, documentation assets, and mechanical render are available.
+- The ACC-layer PCB architecture, sensing islands, shared-bus selection concept, connector structure, and visual documentation are available.
+- The folded FSR-array geometry, symmetric electrode layout, active sensing area, FPC mating tail, separated-layer files, and visual documentation are available.
+- Upcoming work will focus on manufacturing-rule review, stack-up integration, calibration, firmware bring-up, and validation with the programmable simulator.
