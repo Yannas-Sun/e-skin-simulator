@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-06-03 - Document FSR Hardware Classes
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Docs]** Added a class-by-class guide for `backend/fsr_hardware.py`.
+   - `docs/fsr_hardware_classes.md` explains `Clock`, `MCUTransferCounter`, `ModuleUplinkSPI`, `Resistor`, `FSR`, `DMUX`, `ADC`, `SPIBus`, and `FSRArray`.
+   - The guide documents each class's role, key methods, data fields, and position in the FSR scan chain.
+
+2. **[Docs]** Added hardware-flow diagrams and solver notes.
+   - The documentation clarifies how pressure becomes FSR resistance, ngspice row voltage, ADC FIFO words, MISO data, and finally heatmap updates.
+   - It also records the current modeling limits and future analog effects that can be added.
+
 ## 2026-06-03 - Add Dashboard Fusion 3D Model Preview
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
