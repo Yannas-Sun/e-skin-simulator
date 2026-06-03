@@ -10,10 +10,11 @@ import subprocess
 import tempfile
 
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 PROJECT_NGSPICE = ROOT / "tools" / "ngspice" / "Spice64" / "bin" / "ngspice_con.exe"
 VOLTAGE_PATTERN = re.compile(r"v\(vout\)\s*=\s*([-+0-9.eE]+)", re.IGNORECASE)
 NODE_VOLTAGE_PATTERN = re.compile(r"v\(c(\d+)\)\s*=\s*([-+0-9.eE]+)", re.IGNORECASE)
+NCS_VOLTAGE_PATTERN = re.compile(r"v\(ncs(\d+)\)\s*=\s*([-+0-9.eE]+)", re.IGNORECASE)
 VERSION_PATTERN = re.compile(r"ngspice-(\d+(?:\.\d+)*)", re.IGNORECASE)
 
 
@@ -136,8 +137,49 @@ quit
             "nodeVoltages": list(node_voltages),
         }
 
+    def simulate_accel_cs_mux(
+        self,
+        selected_sensor: int,
+        sensor_count: int = 16,
+        vcc: float = 3.3,
+        pullup_ohms: float = 10_000.0,
+        decoder_sink_ohms: float = 70.0,
+        input_leak_ohms: float = 1_000_000_000.0,
+    ) -> dict[str, object]:
+        if sensor_count <= 0:
+            raise ValueError("sensor_count must be positive")
+        if not 1 <= selected_sensor <= sensor_count:
+            raise ValueError("selected_sensor must be within sensor_count")
+        if vcc <= 0:
+            raise ValueError("vcc must be positive")
+        if pullup_ohms <= 0 or decoder_sink_ohms <= 0 or input_leak_ohms <= 0:
+            raise ValueError("resistance values must be positive")
+
+        node_voltages = _simulate_accel_cs_mux_cached(
+            executable=str(self.executable),
+            selected_sensor=int(selected_sensor),
+            sensor_count=int(sensor_count),
+            vcc=round(float(vcc), 9),
+            pullup_ohms=round(float(pullup_ohms), 6),
+            decoder_sink_ohms=round(float(decoder_sink_ohms), 6),
+            input_leak_ohms=round(float(input_leak_ohms), 6),
+        )
+        return {
+            "engine": "ngspice",
+            "version": self.version(),
+            "executable": str(self.executable),
+            "selectedSensor": selected_sensor,
+            "sensorCount": sensor_count,
+            "vcc": vcc,
+            "pullupOhms": pullup_ohms,
+            "decoderSinkOhms": decoder_sink_ohms,
+            "inputLeakOhms": input_leak_ohms,
+            "ncsVoltages": list(node_voltages),
+        }
+
     def health(self) -> dict[str, object]:
         divider = self.simulate_voltage_divider(vcc=3.3, fsr_ohms=10_000.0, load_ohms=10_000.0)
+        accel_cs = self.simulate_accel_cs_mux(selected_sensor=3, sensor_count=4)
         return {
             "available": True,
             "engine": "ngspice",
@@ -149,6 +191,13 @@ quit
                 "expectedVoltage": divider["expectedVoltage"],
                 "absoluteError": divider["absoluteError"],
                 "passed": float(divider["absoluteError"]) < 1e-9,
+            },
+            "accelerometerCsSmokeTest": {
+                "circuit": "4 active-low LIS3DH nCS lines with pull-ups and one decoder sink",
+                "selectedSensor": accel_cs["selectedSensor"],
+                "ncsVoltages": accel_cs["ncsVoltages"],
+                "selectedLineLow": float(accel_cs["ncsVoltages"][2]) < 0.8,
+                "unselectedLinesHigh": all(float(value) > 2.0 for index, value in enumerate(accel_cs["ncsVoltages"]) if index != 2),
             },
         }
 
@@ -227,6 +276,49 @@ def _simulate_fsr_row_cached(
     if len(values) != len(fsr_ohms):
         raise NgSpiceError(f"Unable to parse all FSR row node voltages from ngspice output:\n{output}")
     return tuple(values[index] for index in range(1, len(fsr_ohms) + 1))
+
+
+@lru_cache(maxsize=128)
+def _simulate_accel_cs_mux_cached(
+    executable: str,
+    selected_sensor: int,
+    sensor_count: int,
+    vcc: float,
+    pullup_ohms: float,
+    decoder_sink_ohms: float,
+    input_leak_ohms: float,
+) -> tuple[float, ...]:
+    deck_lines = [
+        "* e-skin LIS3DH active-low chip-select decoder network",
+        f"Vvcc vcc 0 {vcc}",
+    ]
+    for index in range(1, sensor_count + 1):
+        deck_lines.extend(
+            [
+                f"Rpull{index} vcc ncs{index} {pullup_ohms}",
+                f"Rleak{index} ncs{index} 0 {input_leak_ohms}",
+            ]
+        )
+    deck_lines.append(f"Rdecode{selected_sensor} ncs{selected_sensor} 0 {decoder_sink_ohms}")
+    deck_lines.extend(
+        [
+            ".op",
+            ".control",
+            "run",
+            "print " + " ".join(f"v(ncs{index})" for index in range(1, sensor_count + 1)),
+            "quit",
+            ".endc",
+            ".end",
+        ]
+    )
+    backend = NgSpiceBackend(Path(executable))
+    output = backend._run_deck("\n".join(deck_lines) + "\n")
+    values: dict[int, float] = {}
+    for match in NCS_VOLTAGE_PATTERN.finditer(output):
+        values[int(match.group(1))] = float(match.group(2))
+    if len(values) != sensor_count:
+        raise NgSpiceError(f"Unable to parse all accelerometer nCS voltages from ngspice output:\n{output}")
+    return tuple(values[index] for index in range(1, sensor_count + 1))
 
 
 @lru_cache(maxsize=8)

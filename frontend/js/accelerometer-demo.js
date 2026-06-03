@@ -345,8 +345,12 @@ function updateReadouts() {
 
   const rates = demo.hardware.mcu.lineRates;
   const uplink = demo.hardware.moduleUplink;
+  const electrical = demo.hardware.electricalDrive;
+  const selectedCs = demo.hardware.selectedTransfer.chipSelect;
   const lines = [
     `Internal accelerometer SPI, LIS3DH -> STM32G474`,
+    `Electrical solver = ${electrical.engine}; ${electrical.detail}`,
+    `nCS(A${demo.hardware.selectedSensor}) = ${selectedCs.ncsVoltage.toFixed(3)} V, logic ${selectedCs.logic}`,
     `REFRESH = ${demo.hardware.mcu.framesPerSecond.toFixed(0)} full 4x4 frame/s`,
     `COUNTED = ${demo.hardware.mcu.sensorsCounted} sensor reads/frame`,
     ``,
@@ -395,6 +399,7 @@ function manualLines(result) {
   return [
     `Manual LIS3DH SPI`,
     `SENSOR = A${result.selectedSensor}`,
+    `nCS = ${result.chipSelect.ncsVoltage.toFixed(3)} V (${result.electricalDrive.engine})`,
     `OPERATION = ${result.operation}`,
     `MOSI = ${result.mosi.map((byte) => byte.hex).join(" ")}`,
     `MISO = ${result.miso.map((byte) => byte.hex).join(" ")}`,

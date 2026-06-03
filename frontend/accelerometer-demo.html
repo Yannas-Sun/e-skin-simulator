@@ -124,7 +124,7 @@
             </div>
             <ul>
               <li>MCU writes A1-A4 to the chip-select MUX.</li>
-              <li>The MUX pulls exactly one LIS3DH CS low.</li>
+              <li>ngspice solves the active-low nCS voltage layer after the MUX address is applied.</li>
               <li>The selected LIS3DH shares SCK, MOSI, and MISO with the full array.</li>
               <li>MCU sends <code>0xE8</code>: read bit, auto-increment bit, address <code>0x28</code>.</li>
               <li>LIS3DH returns six data bytes for X, Y, and Z acceleration.</li>

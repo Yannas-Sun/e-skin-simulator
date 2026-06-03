@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import math
 
+from ..electrical.ngspice_backend import NgSpiceBackend, NgSpiceError
+
 
 LIS3DH_WHO_AM_I = 0x0F
 LIS3DH_WHO_AM_I_VALUE = 0x33
@@ -46,6 +48,13 @@ LIS3DH_REGISTER_TABLE = [
     },
 ]
 
+ACCEL_VCC = 3.3
+ACCEL_CS_PULLUP_OHMS = 10_000.0
+ACCEL_CS_DECODER_SINK_OHMS = 70.0
+ACCEL_CS_INPUT_LEAK_OHMS = 1_000_000_000.0
+ACCEL_CS_LOW_THRESHOLD = 0.8
+ACCEL_CS_HIGH_THRESHOLD = 2.0
+
 
 def clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
@@ -62,9 +71,85 @@ def int16_to_bytes(value: int) -> tuple[int, int]:
 
 
 @dataclass
+class AccelerometerElectricalDrive:
+    """Electrical nCS-line model for the LIS3DH chip-select decoder."""
+
+    vcc: float = ACCEL_VCC
+    pullup_ohms: float = ACCEL_CS_PULLUP_OHMS
+    decoder_sink_ohms: float = ACCEL_CS_DECODER_SINK_OHMS
+    input_leak_ohms: float = ACCEL_CS_INPUT_LEAK_OHMS
+    low_threshold: float = ACCEL_CS_LOW_THRESHOLD
+    high_threshold: float = ACCEL_CS_HIGH_THRESHOLD
+    use_ngspice: bool = True
+    last_solver: str = "python"
+    last_solver_detail: str = "active-low chip-select pull-up fallback"
+    last_voltages: list[float] = field(default_factory=list)
+
+    def solve_chip_select_voltages(self, selected_sensor: int, sensor_count: int) -> tuple[list[float], str, str]:
+        selected_sensor = max(1, min(sensor_count, int(selected_sensor)))
+        if self.use_ngspice:
+            backend = NgSpiceBackend.discover()
+            if backend is not None:
+                try:
+                    result = backend.simulate_accel_cs_mux(
+                        selected_sensor=selected_sensor,
+                        sensor_count=sensor_count,
+                        vcc=self.vcc,
+                        pullup_ohms=self.pullup_ohms,
+                        decoder_sink_ohms=self.decoder_sink_ohms,
+                        input_leak_ohms=self.input_leak_ohms,
+                    )
+                    return list(result["ncsVoltages"]), "ngspice", "active-low nCS decoder network solved by ngspice"
+                except (NgSpiceError, OSError, ValueError):
+                    pass
+
+        unselected_voltage = self.vcc * self.input_leak_ohms / (self.pullup_ohms + self.input_leak_ohms)
+        selected_sink = 1.0 / ((1.0 / self.decoder_sink_ohms) + (1.0 / self.input_leak_ohms))
+        selected_voltage = self.vcc * selected_sink / (self.pullup_ohms + selected_sink)
+        voltages = [unselected_voltage for _ in range(sensor_count)]
+        voltages[selected_sensor - 1] = selected_voltage
+        return voltages, "python", "active-low chip-select pull-up fallback"
+
+    def chip_select_states(self, selected_sensor: int, sensor_count: int) -> list[dict]:
+        voltages, solver, detail = self.solve_chip_select_voltages(selected_sensor, sensor_count)
+        self.last_solver = solver
+        self.last_solver_detail = detail
+        self.last_voltages = voltages
+        states = []
+        for index, voltage in enumerate(voltages, start=1):
+            cs_level = 0 if voltage <= self.low_threshold else 1
+            states.append(
+                {
+                    "sensor": index,
+                    "commanded": index == selected_sensor,
+                    "selected": cs_level == 0,
+                    "cs": cs_level,
+                    "logic": "LOW_SELECTED" if cs_level == 0 else "HIGH_IDLE",
+                    "ncsVoltage": voltage,
+                    "solver": solver,
+                }
+            )
+        return states
+
+    def snapshot(self) -> dict:
+        return {
+            "engine": self.last_solver,
+            "detail": self.last_solver_detail,
+            "vcc": self.vcc,
+            "pullupOhms": self.pullup_ohms,
+            "decoderSinkOhms": self.decoder_sink_ohms,
+            "inputLeakOhms": self.input_leak_ohms,
+            "lowThreshold": self.low_threshold,
+            "highThreshold": self.high_threshold,
+            "ncsVoltages": self.last_voltages,
+        }
+
+
+@dataclass
 class AccelerometerMux:
     outputs: int = 16
     selected: int = 1
+    electrical: AccelerometerElectricalDrive = field(default_factory=AccelerometerElectricalDrive)
 
     def select(self, index: int) -> None:
         self.selected = max(1, min(self.outputs, int(index)))
@@ -78,14 +163,12 @@ class AccelerometerMux:
         return [(self.address >> bit) & 1 for bit in range(4)]
 
     def chip_select_states(self) -> list[dict]:
-        return [
-            {
-                "sensor": index,
-                "cs": 0 if index == self.selected else 1,
-                "selected": index == self.selected,
-            }
-            for index in range(1, self.outputs + 1)
-        ]
+        return self.electrical.chip_select_states(self.selected, self.outputs)
+
+    def electrical_snapshot(self) -> dict:
+        if not self.electrical.last_voltages:
+            self.chip_select_states()
+        return self.electrical.snapshot()
 
 
 @dataclass

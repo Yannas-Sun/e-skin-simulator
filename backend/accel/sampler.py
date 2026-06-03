@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
-from .accel_hardware import (
+from .hardware import (
     AccelerometerArray,
     AccelerometerMux,
     LIS3DH_OUT_X_L,
@@ -12,7 +12,7 @@ from .accel_hardware import (
     LIS3DH_SPI_READ,
     LIS3DHTransferCounter,
 )
-from .fsr_hardware import ModuleUplinkSPI
+from ..fsr.hardware import ModuleUplinkSPI
 
 
 def clamp(value: float, low: float, high: float) -> float:
@@ -76,6 +76,8 @@ class AccelerometerReadoutProgram:
 
         generated_samples = self.array.update_samples(object_row, object_col, object_size, vibration_g)
         self.mux.select(selected_sensor)
+        selected_chip_selects = self.mux.chip_select_states()
+        selected_chip_state = selected_chip_selects[selected_sensor - 1]
         mosi = self.read_xyz_command
         selected_chip = self.array.get(selected_sensor)
         transfer = selected_chip.transfer(mosi)
@@ -85,6 +87,8 @@ class AccelerometerReadoutProgram:
         counter = LIS3DHTransferCounter()
         for sensor_id in range(1, 17):
             self.mux.select(sensor_id)
+            chip_selects = self.mux.chip_select_states()
+            active_chip_select = chip_selects[sensor_id - 1]
             chip = self.array.get(sensor_id)
             result = chip.transfer(mosi)
             sample = self.decode_xyz_bytes(result["miso"][1:])
@@ -96,7 +100,9 @@ class AccelerometerReadoutProgram:
                     "col": (sensor_id - 1) % 4 + 1,
                     "address": self.mux.address,
                     "addressBits": [{"name": f"A{bit + 1}", "level": level} for bit, level in enumerate(self.mux.address_bits)],
-                    "cs": 0,
+                    "cs": active_chip_select["cs"],
+                    "chipSelect": active_chip_select,
+                    "chipSelects": chip_selects,
                     "mosi": [format_byte(byte) for byte in mosi],
                     "miso": [format_byte(byte) for byte in result["miso"]],
                     "sample": sample,
@@ -105,6 +111,7 @@ class AccelerometerReadoutProgram:
             )
 
         self.mux.select(selected_sensor)
+        selected_chip_selects = self.mux.chip_select_states()
         heatmap = [
             {
                 "sensor": item["sensor"],
@@ -124,6 +131,7 @@ class AccelerometerReadoutProgram:
                 "addressBits": [{"name": f"A{bit + 1}", "level": level} for bit, level in enumerate(self.mux.address_bits)],
                 "chipSelects": self.mux.chip_select_states(),
             },
+            "electricalDrive": self.mux.electrical_snapshot(),
             "lis3dh": {
                 "registerTable": LIS3DH_REGISTER_TABLE,
                 "readCommand": {
@@ -141,6 +149,7 @@ class AccelerometerReadoutProgram:
                 "miso": [format_byte(byte) for byte in transfer["miso"]],
                 "sample": selected_decoded,
                 "command": transfer["command"],
+                "chipSelect": selected_chip_state,
             },
             "frameTransfers": frame_transfers,
             "heatmap": heatmap,
@@ -181,10 +190,13 @@ def run_lis3dh_spi_program(mosi_text: str, sensor: int, object_row: float, objec
         raise ValueError("Enter at least one SPI byte.")
     program.array.update_samples(object_row, object_col, object_size, vibration_g)
     program.mux.select(sensor)
+    chip_selects = program.mux.chip_select_states()
     chip = program.array.get(sensor)
     result = chip.transfer(values)
     return {
         "selectedSensor": sensor,
+        "chipSelect": chip_selects[sensor - 1],
+        "electricalDrive": program.mux.electrical_snapshot(),
         "mosi": [format_byte(byte) for byte in values],
         "miso": [format_byte(byte) for byte in result["miso"]],
         "decodedCommand": result["command"],

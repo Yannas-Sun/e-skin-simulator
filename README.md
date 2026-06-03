@@ -68,6 +68,7 @@ This project is still under active development. The current repository captures 
 - Decode X/Y/Z acceleration only from returned MISO register bytes
 - Generate the hardware heatmap from decoded MISO data rather than direct object placement
 - Display counted SPI traffic for address lines, SCK, MOSI, MISO, CS, and the upstream MCU-to-FPGA frame
+- Solve the active-low LIS3DH chip-select electrical layer through ngspice when the solver is available
 
 ## Demo Videos
 
@@ -119,7 +120,9 @@ The health endpoint runs a `3.3 V` FSR voltage-divider smoke test through ngspic
 http://127.0.0.1:8000/api/ngspice-health
 ```
 
-The interactive FSR demo now uses ngspice for the selected-row electrical network. For each scanned row, Python computes the current FSR resistance values, ngspice solves the row source, MUX on-resistance, 16 FSRs, and 16 load resistors, then the Python MAX11632 model converts those node voltages into FIFO and MISO words. The dashboard-level module heatmap still uses the fast Python pressure model.
+The interactive FSR demo now uses ngspice for the selected-row electrical network. For each scanned row, Python computes the current FSR resistance values, ngspice solves the row source, MUX on-resistance, 16 FSRs, and 16 load resistors, then the Python MAX11632 model converts those node voltages into FIFO and MISO words.
+
+The accelerometer demo uses ngspice for the LIS3DH active-low chip-select electrical layer. The address decoder network is solved as 16 nCS lines with pull-ups, LIS3DH input leakage, and one selected decoder sink. Python then continues with the digital LIS3DH register/SPI behavior. The dashboard-level module heatmap still uses the fast Python pressure model.
 
 ## Fusion 3D Model Preview
 
@@ -149,14 +152,22 @@ The dashboard includes a load-on-demand Fusion OBJ preview for the module model.
 software-simulation/
   server.py                    # root launcher; keeps `python server.py` working
   backend/
+    README.md                  # backend package map and API summary
     server.py                  # Python HTTP server and simulation API
-    accel_hardware.py          # virtual LIS3DH, accelerometer CS MUX, and SPI transfer primitives
-    accel_sampler.py           # programmable LIS3DH scan controller using the virtual hardware
-    fsr_hardware.py            # virtual DMUX, ADC, resistor, FSR, and FSR array primitives
-    fsr_sampler.py             # programmable scan controller using the virtual hardware
-    ngspice_backend.py         # optional circuit-level ngspice adapter and health check
+    accel/
+      README.md                # LIS3DH hardware model documentation
+      hardware.py              # virtual LIS3DH, CS MUX, ngspice nCS drive, and SPI primitives
+      sampler.py               # programmable LIS3DH scan controller
+    electrical/
+      README.md                # shared electrical solver documentation
+      ngspice_backend.py       # optional circuit-level ngspice adapter and health check
+    fsr/
+      README.md                # FSR hardware model documentation
+      hardware.py              # virtual DMUX, ADC, resistor, FSR, and FSR array primitives
+      sampler.py               # programmable FSR scan controller
   circuits/
     ngspice/
+      accel-cs-mux.cir         # LIS3DH active-low nCS pull-up/decoder-sink reference circuit
       fsr-divider.cir          # standalone FSR voltage-divider smoke-test circuit
       fsr-selected-row.cir     # selected-row FSR network with MUX on-resistance and 16 load dividers
   frontend/

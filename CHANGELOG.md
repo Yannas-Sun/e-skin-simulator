@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-06-03 - Add ngspice ACC Drive and Backend Subpackages
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Logic]** Added ngspice-backed electrical solving for the LIS3DH accelerometer chip-select layer.
+   - `backend/accel/hardware.py` now models the 16 active-low nCS lines as pull-up networks with one selected decoder sink.
+   - `backend/electrical/ngspice_backend.py` can solve the accelerometer nCS voltages and returns selected-line and unselected-line smoke-test data through `/api/ngspice-health`.
+   - The accelerometer sampler now returns nCS voltage, logic state, and solver metadata with each selected LIS3DH transfer.
+   - Added `circuits/ngspice/accel-cs-mux.cir` as a standalone ACC chip-select reference deck.
+
+2. **[Repo]** Split the backend into hardware-specific subpackages.
+   - FSR code now lives in `backend/fsr/`.
+   - LIS3DH accelerometer code now lives in `backend/accel/`.
+   - Shared circuit-level solver code now lives in `backend/electrical/`.
+   - Existing public API endpoints and the root `python server.py` launcher remain unchanged.
+
+3. **[Docs]** Added GitHub-rendered README documentation inside backend subfolders.
+   - Moved the FSR hardware class guide to `backend/fsr/README.md`.
+   - Added a new ACC hardware class guide at `backend/accel/README.md`.
+   - Added backend and electrical package README files so GitHub displays the structure directly in each folder.
+
+4. **[Appearance]** Exposed the ACC electrical solver state in the accelerometer demo.
+   - The SPI transfer panel now reports whether ACC chip-select voltages came from `ngspice` or the Python fallback.
+   - Manual LIS3DH SPI runs now show the selected nCS voltage and solver engine.
+
 ## 2026-06-03 - Document FSR Hardware Classes
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

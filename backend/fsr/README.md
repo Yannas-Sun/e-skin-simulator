@@ -1,8 +1,8 @@
 # FSR Hardware Model Classes
 
-This document explains the structure of `backend/fsr_hardware.py`. The file models the hardware-facing layer of the FSR readout demo: row selection, FSR resistance, ngspice electrical solving, MAX11632 ADC behavior, SPI transactions, and data-rate accounting.
+This document explains the structure of `backend/fsr/hardware.py`. The file models the hardware-facing layer of the FSR readout demo: row selection, FSR resistance, ngspice electrical solving, MAX11632 ADC behavior, SPI transactions, and data-rate accounting.
 
-The sampler in `backend/fsr_sampler.py` acts like the MCU scan program. The classes below act like the hardware blocks that the sampler drives.
+The sampler in `backend/fsr/sampler.py` acts like the MCU scan program. The classes below act like the hardware blocks that the sampler drives.
 
 ```text
 FSRReadoutProgram
@@ -324,7 +324,7 @@ flowchart TD
 
 ## What This File Does Not Do
 
-`fsr_hardware.py` does not implement the high-level scan loop. That lives in `backend/fsr_sampler.py`.
+`backend/fsr/hardware.py` does not implement the high-level scan loop. That lives in `backend/fsr/sampler.py`.
 
 It also does not render the frontend. It only returns structured hardware state that the frontend can draw.
 

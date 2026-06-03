@@ -1,0 +1,55 @@
+* e-skin LIS3DH active-low chip-select decoder reference deck
+* Example: nCS8 is selected by a decoder sink, all other nCS lines remain high.
+
+.param VCC=3.3
+.param RPULL=10000
+.param RSINK=70
+.param RLEAK=1e9
+
+Vvcc vcc 0 {VCC}
+
+Rpull1  vcc ncs1  {RPULL}
+Rpull2  vcc ncs2  {RPULL}
+Rpull3  vcc ncs3  {RPULL}
+Rpull4  vcc ncs4  {RPULL}
+Rpull5  vcc ncs5  {RPULL}
+Rpull6  vcc ncs6  {RPULL}
+Rpull7  vcc ncs7  {RPULL}
+Rpull8  vcc ncs8  {RPULL}
+Rpull9  vcc ncs9  {RPULL}
+Rpull10 vcc ncs10 {RPULL}
+Rpull11 vcc ncs11 {RPULL}
+Rpull12 vcc ncs12 {RPULL}
+Rpull13 vcc ncs13 {RPULL}
+Rpull14 vcc ncs14 {RPULL}
+Rpull15 vcc ncs15 {RPULL}
+Rpull16 vcc ncs16 {RPULL}
+
+Rleak1  ncs1  0 {RLEAK}
+Rleak2  ncs2  0 {RLEAK}
+Rleak3  ncs3  0 {RLEAK}
+Rleak4  ncs4  0 {RLEAK}
+Rleak5  ncs5  0 {RLEAK}
+Rleak6  ncs6  0 {RLEAK}
+Rleak7  ncs7  0 {RLEAK}
+Rleak8  ncs8  0 {RLEAK}
+Rleak9  ncs9  0 {RLEAK}
+Rleak10 ncs10 0 {RLEAK}
+Rleak11 ncs11 0 {RLEAK}
+Rleak12 ncs12 0 {RLEAK}
+Rleak13 ncs13 0 {RLEAK}
+Rleak14 ncs14 0 {RLEAK}
+Rleak15 ncs15 0 {RLEAK}
+Rleak16 ncs16 0 {RLEAK}
+
+Rdecode8 ncs8 0 {RSINK}
+
+.op
+.control
+run
+print v(ncs1) v(ncs2) v(ncs3) v(ncs4) v(ncs5) v(ncs6) v(ncs7) v(ncs8)
+print v(ncs9) v(ncs10) v(ncs11) v(ncs12) v(ncs13) v(ncs14) v(ncs15) v(ncs16)
+quit
+.endc
+.end
+

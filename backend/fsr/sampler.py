@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
-from .fsr_hardware import ADC, Clock, DMUX, FSRArray, MCUTransferCounter, ModuleUplinkSPI, SPIBus
+from .hardware import ADC, Clock, DMUX, FSRArray, MCUTransferCounter, ModuleUplinkSPI, SPIBus
 
 
 @dataclass

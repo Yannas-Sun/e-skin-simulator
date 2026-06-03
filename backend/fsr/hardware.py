@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .ngspice_backend import NgSpiceBackend, NgSpiceError
+from ..electrical.ngspice_backend import NgSpiceBackend, NgSpiceError
 
 
 VCC = 3.3

@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
-from .accel_sampler import run_accel_readout, run_lis3dh_spi_program
-from .fsr_sampler import run_adc_mosi_program, run_fsr_readout
-from .ngspice_backend import ngspice_health
+from .accel.sampler import run_accel_readout, run_lis3dh_spi_program
+from .electrical.ngspice_backend import ngspice_health
+from .fsr.sampler import run_adc_mosi_program, run_fsr_readout
 
 
 ROOT = Path(__file__).resolve().parent.parent
