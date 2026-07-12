@@ -18,10 +18,12 @@
             The STM32G474 then sends the raw frame to the upper FPGA/Hub over SPI.
           </p>
         </div>
-        <a class="text-button link-button" href="index.html">Back to Dashboard</a>
+        <div class="demo-header-actions">
+          <a class="text-button link-button" href="index.html">Back to Dashboard</a>
+        </div>
       </header>
 
-      <section class="demo-grid">
+      <section id="fsrDemoGrid" class="demo-grid">
         <aside class="demo-controls panel-section">
           <div class="section-title">
             <h2>Scan Controls</h2>
@@ -57,7 +59,9 @@
           <svg id="fsrCircuit" class="fsr-circuit" viewBox="0 0 1280 880" role="img" aria-label="FSR readout circuit demo"></svg>
         </section>
 
-        <aside class="readout-panel">
+        <button id="toggleReadoutPanel" class="readout-edge-toggle" type="button" aria-label="Hide readout panel" aria-expanded="true">&rsaquo;</button>
+
+        <aside id="readoutPanel" class="readout-panel">
           <div class="panel-section">
             <div class="section-title">
               <h2>Current Reading</h2>

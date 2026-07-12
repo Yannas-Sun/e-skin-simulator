@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 *.log
+.venv-record/
 .DS_Store
 Thumbs.db
 

@@ -19,16 +19,17 @@ class FSRReadoutProgram:
 
     @classmethod
     def create(cls, refresh_rate: float = 10.0) -> "FSRReadoutProgram":
+        clock = Clock(refresh_rate)
         return cls(
             dmux=DMUX(),
-            array=FSRArray(),
+            array=FSRArray(use_ngspice=False),
             adc=ADC(),
             spi=SPIBus(),
             uplink=ModuleUplinkSPI(),
-            clock=Clock(refresh_rate),
+            clock=clock,
         )
 
-    def tick(self, selected_row: int, pressed_row: int, pressed_col: int, object_size: float, object_mass: float) -> dict:
+    def tick(self, selected_row: int, pressed_row: int, pressed_col: int, object_size: float, object_mass: float, include_clock_trace: bool = True) -> dict:
         # Address phase: MCU drives A1-A4, DMUX decodes exactly one row.
         self.dmux.set_selected_row(selected_row)
         address_bits = self.dmux.address_bits
@@ -43,13 +44,20 @@ class FSRReadoutProgram:
             object_mass=object_mass,
         )
 
-        # ADC phase: MCU commands MAX11632 to scan AIN0-AIN15 into its FIFO.
+        # ADC phase: MCU drives only binary SPI lines; MAX11632 decodes MOSI internally.
         setup_command = self.adc.setup_command(clock_mode=0b10, reference_mode=0b10)
         averaging_command = self.adc.averaging_command(avg_on=False, navg=0, nscan=0)
         reset_command = self.adc.reset_command(reset_bit=1)
         scan_command = self.adc.scan_command(start_channel=15, scan_mode=0b00, x_bit=0)
-        adc_scan = self.adc.start_scan([node["nodeVoltage"] for node in column_nodes], command=scan_command)
-        adc_samples = self.adc.read_fifo()
+        adc_transfer = self.adc.transfer_frame(
+            voltages=[node["nodeVoltage"] for node in column_nodes],
+            mosi_bits=[int(bit) for bit in scan_command["binary"]],
+            read_word_count=16,
+            setup=setup_command,
+            averaging=averaging_command,
+        )
+        adc_scan = adc_transfer["scan"]
+        adc_samples = adc_transfer["samples"]
 
         columns = []
         for node, sample in zip(column_nodes, adc_samples):
@@ -84,7 +92,7 @@ class FSRReadoutProgram:
             pressed_col=pressed_col,
             object_size=object_size,
             object_mass=object_mass,
-        )
+        ) if include_clock_trace else []
         mcu_stats = self.mcu_statistics(
             pressed_row=pressed_row,
             pressed_col=pressed_col,
@@ -126,6 +134,13 @@ class FSRReadoutProgram:
                 "averagingCommand": averaging_command,
                 "resetCommand": reset_command,
                 "scan": adc_scan,
+                "spiTransfer": {
+                    "commandBits": adc_transfer["commandBits"],
+                    "misoBits": adc_transfer["misoBits"],
+                    "lineTrace": adc_transfer["lineTrace"],
+                    "lineState": adc_transfer["lineState"],
+                    "effect": adc_transfer["effect"],
+                },
             },
             "spi": spi_frame,
             "moduleUplink": self.uplink.snapshot(self.clock.refresh_hz, module_id=1),
@@ -133,6 +148,64 @@ class FSRReadoutProgram:
             "clock": self.clock.snapshot(),
             "clockTrace": clock_trace,
         }
+
+    def cell_tick(self, selected_row: int, selected_col: int, pressed_row: int, pressed_col: int, object_size: float, object_mass: float) -> dict:
+        result = self.tick(selected_row, pressed_row, pressed_col, object_size, object_mass, include_clock_trace=False)
+        selected_col = max(1, min(self.adc.channels, int(selected_col)))
+        column = result["columns"][selected_col - 1]
+        word = result["spi"]["words"][selected_col - 1]
+        result["responseMode"] = "cell"
+        result["scanCol"] = selected_col
+        result["adcColumn"] = {
+            "col": selected_col,
+            "channel": selected_col,
+            "ain": f"AIN{selected_col - 1}",
+            "word": word,
+            "miso": format(int(word), "016b"),
+            "column": column,
+        }
+        result["columns"] = [column]
+        result["spi"]["words"] = [word]
+        result["adc"]["fifoDepth"] = 1
+        if result["adc"].get("scan"):
+            result["adc"]["scan"] = {
+                **result["adc"]["scan"],
+                "channels": [f"AIN{selected_col - 1}"],
+                "conversions": [result["adc"]["scan"]["conversions"][selected_col - 1]],
+                "fifoDepth": 1,
+            }
+        result["adc"]["spiTransfer"] = {
+            **result["adc"]["spiTransfer"],
+            "misoBits": [int(bit) for bit in format(int(word), "016b")],
+            "effect": f"frontend receives current ADC column C{selected_col}",
+        }
+        return result
+
+    def frame_tick(self, pressed_row: int, pressed_col: int, object_size: float, object_mass: float) -> dict:
+        rows = []
+        representative = None
+        for row in range(1, self.dmux.outputs + 1):
+            row_result = self.tick(row, pressed_row, pressed_col, object_size, object_mass, include_clock_trace=False)
+            if representative is None or row == pressed_row:
+                representative = row_result
+            rows.append(
+                {
+                    "row": row,
+                    "address": row_result["address"],
+                    "columns": row_result["columns"],
+                    "words": row_result["spi"]["words"],
+                    "misoBits": row_result["adc"]["spiTransfer"]["misoBits"],
+                }
+            )
+        result = representative if representative is not None else self.tick(1, pressed_row, pressed_col, object_size, object_mass)
+        result["responseMode"] = "frame"
+        result["frame"] = {
+            "rows": rows,
+            "rowCount": len(rows),
+            "colCount": self.array.cols,
+            "source": "16 hardware row scans returned in one backend response",
+        }
+        return result
 
     def clock_trace(self, pressed_row: int, pressed_col: int, object_size: float, object_mass: float) -> list[dict]:
         trace = []
@@ -147,9 +220,14 @@ class FSRReadoutProgram:
                 object_mass=object_mass,
             )
             scan_command = self.adc.scan_command(start_channel=15, scan_mode=0b00, x_bit=0)
-            self.adc.start_scan([node["nodeVoltage"] for node in nodes], command=scan_command)
-            words = [sample["code"] for sample in self.adc.read_fifo()]
-            fifo_words = [sample["doutWord"] for sample in self.adc.read_fifo()]
+            transfer = self.adc.transfer_frame(
+                voltages=[node["nodeVoltage"] for node in nodes],
+                mosi_bits=[int(bit) for bit in scan_command["binary"]],
+                read_word_count=16,
+            )
+            samples = transfer["samples"]
+            words = [sample["code"] for sample in samples]
+            fifo_words = [sample["doutWord"] for sample in samples]
             active_code = words[pressed_col - 1]
             active_word = fifo_words[pressed_col - 1]
             trace.append(
@@ -186,14 +264,22 @@ class FSRReadoutProgram:
         return counter.snapshot(self.clock.refresh_hz)
 
 
-def run_fsr_readout(row: int, col: int, force: float, object_row: int | None = None, object_size: float = 72.0, object_mass: float | None = None, refresh_rate: float = 10.0) -> dict:
+def run_fsr_readout(row: int, col: int, force: float, object_row: int | None = None, object_size: float = 72.0, object_mass: float | None = None, refresh_rate: float = 10.0, scan_col: int | None = None) -> dict:
     row = max(1, min(16, int(row)))
     object_row = row if object_row is None else max(1, min(16, int(object_row)))
     col = max(1, min(16, int(col)))
+    scan_col = col if scan_col is None else max(1, min(16, int(scan_col)))
     object_size = max(20.0, min(240.0, float(object_size)))
     object_mass = max(0.0, min(1000.0, float(force) * 10.0 if object_mass is None else float(object_mass)))
     refresh_rate = max(1.0, min(700.0, float(refresh_rate)))
-    return FSRReadoutProgram.create(refresh_rate).tick(row, object_row, col, object_size, object_mass)
+    program = FSRReadoutProgram.create(refresh_rate)
+    if refresh_rate <= 1.0:
+        return program.cell_tick(row, scan_col, object_row, col, object_size, object_mass)
+    if refresh_rate > 10.0:
+        return program.frame_tick(object_row, col, object_size, object_mass)
+    result = program.tick(row, object_row, col, object_size, object_mass, include_clock_trace=False)
+    result["responseMode"] = "row"
+    return result
 
 
 def parse_mosi_bytes(text: str) -> list[int]:
@@ -262,47 +348,24 @@ def run_adc_mosi_program(
     averaging = adc.averaging_command(avg_on=False, navg=0, nscan=0)
     mosi_values = parse_mosi_bytes(mosi_text)
     transactions = []
-    all_miso_words: list[int] = []
+    all_miso_words: list[dict] = []
 
     for index, value in enumerate(mosi_values, start=1):
-        decoded = adc.describe_input_byte(value)
-        miso_words: list[int] = []
-        effect = "decoded only"
-        fifo_depth = len(adc.fifo)
-
-        if decoded["register"] == "setup":
-            fields = decoded["fields"]
-            setup = adc.setup_command(clock_mode=int(fields["CKSEL"]), reference_mode=int(fields["REFSEL"]))
-            effect = setup["label"]
-        elif decoded["register"] == "averaging":
-            fields = decoded["fields"]
-            averaging = adc.averaging_command(
-                avg_on=bool(fields["AVGON"]),
-                navg=int(fields["NAVG"]),
-                nscan=int(fields["NSCAN"]),
-            )
-            effect = averaging["label"]
-        elif decoded["register"] == "reset":
-            reset_bit = int(decoded["fields"]["RESET"])
-            if reset_bit == 1:
-                adc.fifo = []
-                adc.eoc = 1
-                effect = "FIFO cleared"
-            else:
-                adc = ADC()
-                setup = adc.setup_command(clock_mode=0b10, reference_mode=0b10)
-                averaging = adc.averaging_command(avg_on=False, navg=0, nscan=0)
-                effect = "registers reset to power-up defaults"
-            fifo_depth = len(adc.fifo)
-        elif decoded["register"] == "conversion":
-            command = command_from_input_byte(adc, value)
-            scan = adc.start_scan(voltages, command=command, nscan=int(averaging["nscan"]))
-            miso_words = [int(sample["doutWord"]) for sample in adc.read_fifo()]
-            all_miso_words.extend(miso_words)
-            fifo_depth = int(scan["fifoDepth"])
-            effect = scan["command"]["scanModeLabel"]
-        else:
-            effect = "reserved input byte; no conversion"
+        bits = [int(bit) for bit in format(value, "08b")]
+        transfer = adc.transfer_frame(
+            voltages=voltages,
+            mosi_bits=bits,
+            setup=setup,
+            averaging=averaging,
+        )
+        decoded = transfer["decoded"]
+        setup = transfer["setup"]
+        averaging = transfer["averaging"]
+        samples = transfer["samples"]
+        miso_words = [int(sample["doutWord"]) for sample in samples]
+        all_miso_words.extend(samples)
+        effect = transfer["effect"]
+        fifo_depth = int(transfer["fifoDepth"])
 
         transactions.append(
             {
@@ -315,14 +378,18 @@ def run_adc_mosi_program(
                 "decoded": decoded,
                 "effect": effect,
                 "fifoDepth": fifo_depth,
+                "spiLineTrace": transfer["lineTrace"],
+                "misoBits": "".join(str(bit) for bit in transfer["misoBits"]),
                 "misoWords": [
                     {
                         "value": word,
+                        "channel": int(sample["channel"]),
+                        "ain": str(sample["ain"]),
                         "hex": f"0x{word:04X}",
                         "binary": format(word, "016b"),
                         "bytes": [(word >> 8) & 0xFF, word & 0xFF],
                     }
-                    for word in miso_words
+                    for word, sample in zip(miso_words, samples)
                 ],
             }
         )
@@ -337,11 +404,13 @@ def run_adc_mosi_program(
         "transactions": transactions,
         "misoWords": [
             {
-                "value": word,
-                "hex": f"0x{word:04X}",
-                "binary": format(word, "016b"),
-                "bytes": [(word >> 8) & 0xFF, word & 0xFF],
+                "value": int(sample["doutWord"]),
+                "channel": int(sample["channel"]),
+                "ain": str(sample["ain"]),
+                "hex": f"0x{int(sample['doutWord']):04X}",
+                "binary": format(int(sample["doutWord"]), "016b"),
+                "bytes": [(int(sample["doutWord"]) >> 8) & 0xFF, int(sample["doutWord"]) & 0xFF],
             }
-            for word in all_miso_words
+            for sample in all_miso_words
         ],
     }

@@ -1,0 +1,7 @@
+pyserial
+numpy
+keyboard
+scipy
+PyQt5
+pyqtgraph
+PyOpenGL

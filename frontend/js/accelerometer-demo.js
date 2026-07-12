@@ -34,6 +34,8 @@ const manualSpi = document.getElementById("manualSpi");
 const runSpi = document.getElementById("runSpi");
 const spiStatus = document.getElementById("spiStatus");
 const manualOutput = document.getElementById("manualOutput");
+const accelDemoGrid = document.getElementById("accelDemoGrid");
+const toggleReadoutPanel = document.getElementById("toggleReadoutPanel");
 
 const layout = {
   muxX: 360,
@@ -91,6 +93,22 @@ function formatRate(value, unit) {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)} Mb/s`;
   if (value >= 1000) return `${(value / 1000).toFixed(1)} kb/s`;
   return `${value.toFixed(0)} b/s`;
+}
+
+function formatBitAndByteRate(bitsPerSecond) {
+  const bits = Number(bitsPerSecond) || 0;
+  const bytes = bits / 8;
+  const bitText = bits >= 1_000_000
+    ? `${(bits / 1_000_000).toFixed(2)} Mb/s`
+    : bits >= 1000
+      ? `${(bits / 1000).toFixed(1)} kb/s`
+      : `${bits.toFixed(0)} bit/s`;
+  const byteText = bytes >= 1_000_000
+    ? `${(bytes / 1_000_000).toFixed(2)} MB/s`
+    : bytes >= 1000
+      ? `${(bytes / 1000).toFixed(1)} kB/s`
+      : `${bytes.toFixed(1)} B/s`;
+  return `${bitText} (${byteText})`;
 }
 
 function cellPosition(sensor) {
@@ -296,6 +314,7 @@ function drawSpi(root) {
   const y0 = layout.muxY - 82;
   const x1 = layout.mcuX + layout.mcuW;
   const x2 = layout.arrayX + layout.arrayW + 36;
+  const routeX = layout.arrayX + layout.arrayW + 28;
   const labels = [
     ["SCK", "spi-sck"],
     ["MOSI", "spi-mosi"],
@@ -304,9 +323,10 @@ function drawSpi(root) {
   ];
   labels.forEach(([label, cls], index) => {
     const y = y0 + index * 18;
+    const mcuY = layout.mcuY + 22 + index * 16;
     const active = demo.auto || demo.hardware.selectedSensor === demo.sensor;
-    path(root, `M ${x1} ${layout.mcuY + 24 + index * 14} L ${x1 + 42} ${layout.mcuY + 24 + index * 14} L ${x1 + 42} ${y} L ${x2} ${y}`, active ? `spi-wire spi-active ${cls}` : `spi-wire ${cls}`);
-    addText(root, label, x1 + 48, y + 4, { class: active ? "pin-label active-label" : "pin-label" });
+    path(root, `M ${x1} ${mcuY} L ${routeX} ${mcuY} L ${routeX} ${y} L ${x2} ${y}`, active ? `spi-wire spi-active ${cls}` : `spi-wire ${cls}`);
+    addText(root, label, x1 + 12, mcuY + 4, { class: active ? "pin-label active-label" : "pin-label" });
   });
   addText(root, "Shared SPI bus", x2 - 8, y0 - 12, { class: "small-label", "text-anchor": "end" });
 }
@@ -345,29 +365,20 @@ function updateReadouts() {
 
   const rates = demo.hardware.mcu.lineRates;
   const uplink = demo.hardware.moduleUplink;
-  const electrical = demo.hardware.electricalDrive;
-  const selectedCs = demo.hardware.selectedTransfer.chipSelect;
+  const uplinkRates = uplink.lineRates;
   const lines = [
-    `Internal accelerometer SPI, LIS3DH -> STM32G474`,
-    `Electrical solver = ${electrical.engine}; ${electrical.detail}`,
-    `nCS(A${demo.hardware.selectedSensor}) = ${selectedCs.ncsVoltage.toFixed(3)} V, logic ${selectedCs.logic}`,
-    `REFRESH = ${demo.hardware.mcu.framesPerSecond.toFixed(0)} full 4x4 frame/s`,
-    `COUNTED = ${demo.hardware.mcu.sensorsCounted} sensor reads/frame`,
+    `MCU <-> LIS3DH SPI`,
+    `Address: ${formatBitAndByteRate(rates.Address.perSecond)}`,
+    `SCK: ${formatBitAndByteRate(rates.SCK.perSecond)}`,
+    `MOSI: ${formatBitAndByteRate(rates.MOSI.perSecond)}`,
+    `MISO: ${formatBitAndByteRate(rates.MISO.perSecond)}`,
+    `CS: ${formatBitAndByteRate(rates.CS.edgesPerSecond)}`,
     ``,
-    `Line          per frame        per second`,
-    `Address       ${rates.Address.perFrame.toFixed(0).padStart(5)} bit       ${formatRate(rates.Address.perSecond, rates.Address.unit)}`,
-    `SCK           ${rates.SCK.perFrame.toFixed(0).padStart(5)} pulse     ${formatRate(rates.SCK.perSecond, rates.SCK.unit)}`,
-    `MOSI          ${rates.MOSI.perFrame.toFixed(0).padStart(5)} bit       ${formatRate(rates.MOSI.perSecond, rates.MOSI.unit)}`,
-    `MISO          ${rates.MISO.perFrame.toFixed(0).padStart(5)} bit       ${formatRate(rates.MISO.perSecond, rates.MISO.unit)}`,
-    `CS            ${rates.CS.perFrame.toFixed(0).padStart(5)} assert    ${formatRate(rates.CS.perSecond, rates.CS.unit)}`,
-    ``,
-    `LIS3DH command: ${demo.hardware.lis3dh.readCommand.command.hex} ${demo.hardware.lis3dh.readCommand.command.binary}`,
-    `Meaning: READ=1, MS=1, register=0x28`,
-    `MISO: dummy + XL XH YL YH ZL ZH`,
-    ``,
-    `Module uplink SPI, STM32G474 -> ${uplink.upperLayer}`,
-    `RESULT = ${uplink.samplesPerFrame} sensors x ${uplink.sampleBits} bit + ${uplink.metadataBytes} B metadata`,
-    `Required SCK = ${formatRate(uplink.clock.requiredSckHz, "pulse")}`,
+    `MCU <-> FPGA SPI`,
+    `SCK: ${formatBitAndByteRate(uplinkRates.SCK.perSecond)}`,
+    `MOSI: ${formatBitAndByteRate(uplinkRates.MOSI.perSecond)}`,
+    `MISO: ${formatBitAndByteRate(uplinkRates.MISO.perSecond)}`,
+    `CS: ${formatBitAndByteRate(uplinkRates.CS.edgesPerSecond)}`,
   ];
   spiFrame.textContent = lines.join("\n");
 }
@@ -445,6 +456,13 @@ function stopAutoScan() {
   drawCircuit();
 }
 
+function toggleReadoutVisibility() {
+  const hidden = accelDemoGrid.classList.toggle("readout-hidden");
+  toggleReadoutPanel.textContent = hidden ? "\u2039" : "\u203a";
+  toggleReadoutPanel.setAttribute("aria-label", hidden ? "Show readout panel" : "Hide readout panel");
+  toggleReadoutPanel.setAttribute("aria-expanded", String(!hidden));
+}
+
 objectSizeRange.addEventListener("input", async (event) => {
   demo.objectSize = Number(event.target.value);
   await update();
@@ -468,6 +486,8 @@ autoScan.addEventListener("click", () => {
   if (demo.auto) stopAutoScan();
   else startAutoScan();
 });
+
+toggleReadoutPanel.addEventListener("click", toggleReadoutVisibility);
 
 runSpi.addEventListener("click", async () => {
   try {

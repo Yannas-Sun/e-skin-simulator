@@ -526,6 +526,140 @@ class ADC:
     def read_fifo(self) -> list[dict[str, int | float | str]]:
         return self.fifo.copy()
 
+    def execute_input_byte(self, value: int, voltages: list[float], setup: dict | None = None, averaging: dict | None = None) -> dict:
+        """Execute one MAX11632 input byte as if it arrived over MOSI."""
+
+        setup_state = self.setup_command(clock_mode=0b10, reference_mode=0b10) if setup is None else setup
+        averaging_state = self.averaging_command(avg_on=False, navg=0, nscan=0) if averaging is None else averaging
+        decoded = self.describe_input_byte(value)
+        scan = None
+        samples: list[dict[str, int | float | str]] = []
+        effect = "decoded only"
+
+        if decoded["register"] == "setup":
+            fields = decoded["fields"]
+            setup_state = self.setup_command(clock_mode=int(fields["CKSEL"]), reference_mode=int(fields["REFSEL"]))
+            effect = setup_state["label"]
+        elif decoded["register"] == "averaging":
+            fields = decoded["fields"]
+            averaging_state = self.averaging_command(
+                avg_on=bool(fields["AVGON"]),
+                navg=int(fields["NAVG"]),
+                nscan=int(fields["NSCAN"]),
+            )
+            effect = averaging_state["label"]
+        elif decoded["register"] == "reset":
+            reset_bit = int(decoded["fields"]["RESET"])
+            if reset_bit == 1:
+                self.fifo = []
+                self.eoc = 1
+                effect = "FIFO cleared"
+            else:
+                self.__init__(channels=self.channels, bits=self.bits, vref=self.vref)
+                setup_state = self.setup_command(clock_mode=0b10, reference_mode=0b10)
+                averaging_state = self.averaging_command(avg_on=False, navg=0, nscan=0)
+                effect = "registers reset to power-up defaults"
+        elif decoded["register"] == "conversion":
+            command = self.scan_command(
+                start_channel=int(decoded["fields"]["CHSEL"]),
+                scan_mode=int(decoded["fields"]["SCAN"]),
+                x_bit=int(decoded["fields"]["X"]),
+            )
+            scan = self.start_scan(voltages, command=command, nscan=int(averaging_state["nscan"]))
+            samples = self.read_fifo()
+            effect = command["scanModeLabel"]
+        else:
+            effect = "reserved input byte; no conversion"
+
+        return {
+            "decoded": decoded,
+            "setup": setup_state,
+            "averaging": averaging_state,
+            "scan": scan,
+            "samples": samples,
+            "effect": effect,
+            "fifoDepth": len(self.fifo),
+            "eoc": self.eoc,
+        }
+
+    def transfer_frame(
+        self,
+        voltages: list[float],
+        mosi_bits: list[int],
+        read_word_count: int | None = None,
+        setup: dict | None = None,
+        averaging: dict | None = None,
+    ) -> dict:
+        """Run a complete active-low CS SPI frame using only 0/1 line states.
+
+        The frame is modeled as the real MCU sequence:
+        CS low -> clock 8 MOSI bits MSB first -> CS high while conversion runs ->
+        CS low -> clock FIFO bits out on MISO -> CS high.
+        """
+
+        if len(mosi_bits) != 8 or any(bit not in (0, 1) for bit in mosi_bits):
+            raise ValueError("MAX11632 MOSI command must be exactly eight 0/1 bits")
+
+        command_value = int("".join(str(bit) for bit in mosi_bits), 2)
+        command_result = self.execute_input_byte(command_value, voltages, setup=setup, averaging=averaging)
+        samples = command_result["samples"]
+        if read_word_count is None:
+            read_word_count = len(samples)
+        read_word_count = max(0, min(len(samples), int(read_word_count)))
+
+        fifo_words = [int(sample["doutWord"]) for sample in samples[:read_word_count]]
+        fifo_bits = [int(bit) for word in fifo_words for bit in format(word, f"0{MAX11632_OUTPUT_WORD_BITS}b")]
+        command_cycles = [
+            {
+                "index": index + 1,
+                "CS": 0,
+                "SCK": 1,
+                "MOSI": int(bit),
+                "MISO": 0,
+                "phase": "command",
+            }
+            for index, bit in enumerate(mosi_bits)
+        ]
+        read_cycles = [
+            {
+                "index": index + 1,
+                "CS": 0,
+                "SCK": 1,
+                "MOSI": 0,
+                "MISO": int(bit),
+                "phase": "read_fifo",
+            }
+            for index, bit in enumerate(fifo_bits)
+        ]
+        idle_cycles = [
+            {"index": 0, "CS": 1, "SCK": 0, "MOSI": 0, "MISO": 0, "phase": "idle_before_command"},
+            {"index": 0, "CS": 1, "SCK": 0, "MOSI": 0, "MISO": 0, "EOC": int(self.eoc), "phase": "conversion_complete"},
+            {"index": 0, "CS": 1, "SCK": 0, "MOSI": 0, "MISO": 0, "phase": "idle_after_read"},
+        ]
+
+        return {
+            "commandValue": command_value,
+            "commandBits": mosi_bits,
+            "command": command_result["scan"]["command"] if command_result["scan"] else command_result["decoded"],
+            "decoded": command_result["decoded"],
+            "setup": command_result["setup"],
+            "averaging": command_result["averaging"],
+            "scan": command_result["scan"],
+            "samples": samples[:read_word_count],
+            "fifoWords": fifo_words,
+            "misoBits": fifo_bits,
+            "lineTrace": [idle_cycles[0], *command_cycles, idle_cycles[1], *read_cycles, idle_cycles[2]],
+            "lineState": {
+                "CS": 1,
+                "SCK": 0,
+                "MOSI": 0,
+                "MISO": fifo_bits[-1] if fifo_bits else 0,
+                "EOC": int(self.eoc),
+            },
+            "effect": command_result["effect"],
+            "fifoDepth": command_result["fifoDepth"],
+        }
+
 
 class SPIBus:
     """Four-wire SPI interface between the MCU and ADC."""

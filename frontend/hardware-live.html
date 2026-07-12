@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Real Hardware FSR Console</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="hardware-body">
+    <main class="hardware-shell">
+      <header class="hardware-header">
+        <div>
+          <p class="eyebrow">Physical Teensy readout</p>
+          <h1>Real-Time FSR Hardware Console</h1>
+          <p>Direct serial readout from the connected e-skin board, separated from the software simulator.</p>
+        </div>
+        <div class="demo-header-actions">
+          <a class="text-button link-button" href="index.html">Dashboard</a>
+          <a class="text-button link-button" href="fsr-demo.html">FSR Simulation</a>
+        </div>
+      </header>
+
+      <section class="hardware-layout">
+        <aside class="hardware-sidebar">
+          <div class="panel-section">
+            <div class="section-title">
+              <h2>Connection</h2>
+              <span id="liveState">offline</span>
+            </div>
+            <label>
+              <span>Port</span>
+              <input id="livePort" type="text" value="COM5" spellcheck="false" />
+            </label>
+            <label>
+              <span>Protocol</span>
+              <select id="liveProtocol">
+                <option value="eskin-combined-stream">Combined FSR + ACC active stream</option>
+                <option value="eskin-combined-delta">Combined FSR + ACC delta stream</option>
+                <option value="eskin-combined">Combined FSR + ACC request/response</option>
+                <option value="fsr-serial">FSR-only firmware</option>
+                <option value="eskin-fsr">Combined cached FSR</option>
+              </select>
+            </label>
+            <label>
+              <span>Display limit</span>
+              <input id="displayLimit" type="range" min="50" max="1600" value="150" />
+              <output id="displayLimitValue">150</output>
+            </label>
+            <label>
+              <span>Deadband</span>
+              <input id="deadband" type="range" min="0" max="150" value="8" />
+              <output id="deadbandValue">8</output>
+            </label>
+            <div class="hardware-live-actions">
+              <button id="toggleLive" class="text-button" type="button">Live FSR</button>
+              <button id="tareLive" class="text-button" type="button">Tare</button>
+            </div>
+            <p id="liveStatus" class="control-note">Open the serial stream to begin hardware visualization.</p>
+          </div>
+
+          <div class="panel-section firmware-card">
+            <div class="section-title">
+              <h2>Firmware Upload</h2>
+              <span>Teensy 4.1</span>
+            </div>
+            <label>
+              <span>Target</span>
+              <select id="firmwareTarget">
+                <option value="combined">Combined FSR + ACC</option>
+                <option value="combined-delta">Combined FSR + ACC Delta</option>
+                <option value="combined-triggered">Combined FSR Triggered Scan</option>
+                <option value="fsr">FSR only</option>
+              </select>
+            </label>
+            <label>
+              <span id="firmwareSampleHzLabel">Sample frequency</span>
+              <input id="firmwareSampleHz" type="number" min="1" max="5000" value="50" />
+              <small id="firmwareSampleHzNote" class="control-note">Used as the firmware scan/output rate.</small>
+            </label>
+            <label>
+              <span>Baseline delta threshold</span>
+              <input id="firmwareTriggerThreshold" type="number" min="0" max="65535" value="150" />
+            </label>
+            <label>
+              <span>FQBN</span>
+              <input id="firmwareFqbnLive" type="text" value="teensy:avr:teensy41" spellcheck="false" />
+            </label>
+            <button id="flashHardwareFirmware" class="text-button" type="button">Burn Firmware</button>
+            <pre id="hardwareFlashStatus" class="spi-frame firmware-status">Ready.</pre>
+          </div>
+
+          <div class="panel-section">
+            <div class="section-title">
+              <h2>COM5 Frame Data</h2>
+              <span>latest</span>
+            </div>
+            <pre id="frameDataPreview" class="spi-frame firmware-status">No hardware frame yet.</pre>
+          </div>
+        </aside>
+
+        <section class="hardware-main">
+          <div class="hardware-metrics">
+            <div class="metric">
+              <span class="metric-label">Hardware FPS</span>
+              <strong id="hardwareFps">0.0</strong>
+            </div>
+            <div class="metric">
+              <span class="metric-label">UI FPS</span>
+              <strong id="uiFps">0.0</strong>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Serial throughput</span>
+              <strong id="serialRate">0 bit/s</strong>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Frame payload</span>
+              <strong id="frameBytes">0 B</strong>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Layer 1 peak</span>
+              <strong id="layer1Peak">0</strong>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Layer 2 peak</span>
+              <strong id="layer2Peak">0</strong>
+            </div>
+          </div>
+
+          <div class="hardware-visual-grid">
+            <article class="hardware-visual-card">
+              <div class="section-title">
+                <h2>Layer 1 Flexible 2D Heatmap</h2>
+                <span id="layer1State">waiting</span>
+              </div>
+              <canvas id="layer1Heatmap" class="smooth-heatmap" width="420" height="420"></canvas>
+            </article>
+            <article class="hardware-visual-card">
+              <div class="section-title">
+                <h2>Layer 2 Flexible 2D Heatmap</h2>
+                <span id="layer2State">waiting</span>
+              </div>
+              <canvas id="layer2Heatmap" class="smooth-heatmap" width="420" height="420"></canvas>
+            </article>
+            <article class="hardware-visual-card">
+              <div class="section-title">
+                <h2>Layer 1 3D Surface</h2>
+                <span>smooth mesh</span>
+              </div>
+              <canvas id="layer1Surface" class="smooth-surface" width="460" height="268"></canvas>
+            </article>
+            <article class="hardware-visual-card">
+              <div class="section-title">
+                <h2>Layer 2 3D Surface</h2>
+                <span>smooth mesh</span>
+              </div>
+              <canvas id="layer2Surface" class="smooth-surface" width="460" height="268"></canvas>
+            </article>
+            <article class="hardware-visual-card hardware-combined-card">
+              <div class="section-title">
+                <h2>Combined 3D View</h2>
+                <span>FSR + ACC</span>
+              </div>
+              <canvas id="combinedScene" class="combined-scene" width="520" height="620"></canvas>
+            </article>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="js/hardware-live.js"></script>
+  </body>
+</html>

@@ -96,6 +96,7 @@
             <button id="deleteSelection" type="button" class="text-button danger">Delete</button>
             <button id="resetView" type="button" class="text-button">Reset</button>
             <a class="text-button link-button" href="fsr-demo.html">FSR Demo</a>
+            <a class="text-button link-button" href="hardware-live.html">Hardware Live</a>
             <a class="text-button link-button" href="accelerometer-demo.html">Accel Demo</a>
           </div>
         </div>
@@ -140,6 +141,26 @@
             <button id="loadModuleModel" class="text-button model-load-button" type="button">Load 3D Model</button>
             <button id="fullscreenModuleModel" class="text-button model-fullscreen-button" type="button">Fullscreen</button>
           </div>
+        </div>
+
+        <div class="panel-section firmware-card">
+          <div class="section-title">
+            <h2>One-click Firmware</h2>
+            <span>Teensy 4.1</span>
+          </div>
+          <label>
+            <span>Port</span>
+            <input id="firmwarePort" type="text" value="COM5" spellcheck="false" />
+          </label>
+          <label>
+            <span>FQBN</span>
+            <input id="firmwareFqbn" type="text" value="teensy:avr:teensy41" spellcheck="false" />
+          </label>
+          <div class="firmware-actions">
+            <button id="flashFsr" class="text-button" type="button">Burn FSR</button>
+            <button id="flashCombined" class="text-button" type="button">Burn Combo</button>
+          </div>
+          <pre id="flashStatus" class="spi-frame firmware-status">Ready. Select a firmware target to compile and upload.</pre>
         </div>
 
         <div class="panel-section">

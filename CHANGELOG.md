@@ -1,5 +1,136 @@
 # Changelog
 
+## 2026-06-28 - Split Real Hardware Console from FSR Simulation
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Feature]** Added a dedicated real-hardware FSR console page.
+   - `frontend/hardware-live.html` separates physical COM-port readout from the FSR software simulation page.
+   - The dashboard toolbar now links to `Hardware Live` next to the existing FSR and accelerometer demos.
+
+2. **[Feature]** Added simultaneous two-layer hardware visualization.
+   - The new hardware page displays Layer 1 and Layer 2 at the same time.
+   - Each layer has a flexible smooth 2D heatmap and a smooth 3D surface view.
+   - The smooth heatmap interpolates between the 16 x 16 hardware samples instead of showing only hard square cells.
+
+3. **[Feature]** Moved firmware upload into the hardware page with sample-frequency input.
+   - The hardware page includes target selection, serial port, FQBN, and sample-frequency fields.
+   - Firmware upload closes any active serial readout before compiling and uploading.
+   - For combined firmware, the backend prepares a temporary sketch copy with `ACC_SAMPLE_RATE` and `FSR_SAMPLE_RATE` set from the requested sample frequency.
+   - The original hardware sketch files are not modified by this workflow.
+   - Temporary firmware build directories are now cleaned automatically after compile/upload attempts, including Windows/OneDrive read-only generated sketch folders.
+   - Added a `Combined FSR + ACC Delta` firmware target that burns a selective FSR transmission loop using full-sync, delta, and no-change frame markers.
+   - Added a `Combined FSR Triggered Scan` firmware target with a user-set baseline-relative trigger threshold: idle mode scans only Layer 1 at fixed 10 Hz, then switches to user-selected high-frequency two-layer scanning when Layer 1 changes from its stored baseline beyond the threshold, returning to idle after about one second below threshold and refreshing the baseline.
+   - Triggered firmware mode now labels the sample-rate field as `High-speed frequency`, explains that idle mode is fixed at 10 Hz, and automatically raises an accidentally low active frequency to `200 Hz` when the target is selected.
+   - Triggered scan now uses baseline-relative activation so raw values that decrease under pressure can still wake high-speed scanning while idle raw offsets do not keep the module awake.
+   - The hardware `Tare` button now also sends a `T` control byte to compatible triggered firmware, clearing the MCU-side trigger baseline so the next idle scan records the new reference.
+   - Triggered scan wake-up now checks baseline-relative changes on both FSR layers during the fixed 10 Hz idle scan, so pressure on either layer can switch the module into the selected high-frequency streaming mode.
+   - The Layer 1/2 3D surface plots now draw semi-transparent side skirts down to the base plane and use a slightly lower z scale, reducing the apparent floating-surface artifact.
+
+4. **[Logic]** Expanded hardware frame payloads for live throughput and two-layer rendering.
+   - `/api/fsr-hardware-frame` now returns all available raw layers, delta layers, normalized layers, per-layer peaks, serial bytes per frame, and estimated serial bit rate.
+   - The frontend measures UI frame rate and serial bytes per second from successfully received hardware frames.
+   - Real hardware acquisition is now decoupled from frontend polling: the Python backend continuously scans the Teensy in a background stream and the browser samples the cached result at a fixed 10 Hz.
+   - Frontend request-rate controls were removed so displayed serial throughput reflects backend-measured Teensy-to-PC hardware transfer rather than browser polling speed.
+   - Added `eskin-combined-stream`, where the Teensy actively emits ACC plus two-layer FSR frames at the flashed `FSR_SAMPLE_RATE` and the backend only receives and caches new frames.
+   - Active stream frames include an `ESKN` marker so the backend can synchronize to frame boundaries before decoding timestamps, ACC samples, and FSR layers.
+   - Combined active-stream firmware generation now applies a Teensy-side Layer 2 displayed row 8 calibration factor of `1/7` before serial transmission to compensate for the observed over-sensitive row.
+   - Hardware frame payloads now include the full 16-device ACC array so combined FSR/ACC visualizations can be driven by the same serial frame.
+   - Added `eskin-combined-delta`, where the backend reconstructs the complete FSR map from `ESKF` full frames, `ESKD` changed-cell frames, and `ESKN` no-change heartbeats.
+
+5. **[Feature]** Added live COM5 frame-data inspection.
+   - The hardware page now shows the latest protocol, port, FSR timestamp, ACC timestamp, frame payload size, baseline state, and ACC preview from the current serial frame.
+   - This makes the raw COM5 payload visible beside the smooth FSR heatmaps, 3D surfaces, and transfer-rate metrics.
+   - The frame-data panel now highlights MCU-to-PC serial throughput in `Mbit`/`Mb/s` terms, while still showing the equivalent frame size in bytes.
+   - Serial throughput no longer uses browser polling rate or frame-size estimation as the displayed value.
+   - Serial throughput is now measured from actual bytes read from the COM port: the backend writes received serial bytes into a temporary meter file, reads that file size once per second, reports the previous second's bit rate, then truncates the file for the next second.
+
+6. **[Appearance]** Redrew the hardware FSR plots using the MATLAB reference visualization style.
+   - `frontend/js/hardware-live.js` now follows the plotting approach from `serialComEskinCombined.m`: tare-based delta layers, fixed display limit behavior, colorbar-style scaling, and MATLAB-like `surf(layer)` views.
+   - The 2D plots now use matrix heatmap rendering with grid ticks, colorbars, and per-layer maximum readouts.
+   - The 3D plots now use surface mesh rendering with z-axis scaling and colorbar references to better match the MATLAB validation workflow.
+   - The individual Layer 1/2 3D surface plots now use a larger centered projection and a filled low-value base plane, reducing unused white space and visual holes.
+   - Added a right-side combined 3D view inspired by the original PyQtGraph `plot.py`, overlaying Layer 1, Layer 2, and LIS3DH samples in one live scene.
+   - The combined 3D view now uses clearer soft continuous rendering with smooth ribbon sampling and subtle peak highlights, removing visible mesh edges without washing out the data.
+   - The combined 3D view can now be rotated by dragging directly on the canvas, while live data continues updating.
+   - The combined 3D view now keeps the FSR surfaces anchored to a visible ground plane and supports mouse-wheel zoom.
+   - The hardware page default display limit was lowered from `300` to `150` for more sensitive visualization.
+
+7. **[Appearance]** Made the live hardware page more compact and faster by default.
+   - `frontend/hardware-live.html` now starts `Live request rate` at the maximum slider value of `120 Hz`.
+   - The Layer 1/2 2D heatmap canvases and 3D surface canvases were reduced in size.
+   - `frontend/styles.css` now constrains the hardware plot card widths and maximum plot heights so all real-time views fit more comfortably on screen.
+
+8. **[Fix]** Improved serial session lifecycle handling.
+   - Opening a different protocol on the same COM port now closes the previous hardware session first.
+   - Hardware read or tare failures now release the COM port immediately.
+   - `POST /api/fsr-hardware-close` is used by the frontend before page unload, protocol changes, and firmware upload.
+
+9. **[Fix]** Made firmware sketch preparation robust against locked editor folders.
+   - Temporary firmware copies now ignore `.vscode`, `.git`, build caches, `__pycache__`, and other non-sketch artifacts.
+   - Firmware builds now use timestamped temporary folders under `.codex_firmware_build`, avoiding failures when an older copied sketch directory is locked by Windows, OneDrive, or an editor.
+   - Combined firmware preparation now rewrites the temporary sketch into an active streaming firmware, so the burned sample frequency controls Teensy-side output timing instead of PC request timing.
+
+10. **[Fix]** Corrected combined FSR two-layer frame unpacking.
+   - The backend now decodes `eskin-combined` FSR payloads according to the firmware order `[fsr_l1_row1, fsr_l2_row1, fsr_l1_row2, fsr_l2_row2, ...]`.
+   - This fixes the issue where Layer 1 and Layer 2 were split as the first and second half of the payload, causing each layer to show only part of the physical sensing area.
+   - The decoded matrix orientation now matches the MATLAB reference `reshape(fsr_vec, 2*n, n)` workflow used in `serialComEskinCombined.m`.
+   - Layer 2 now uses a higher default deadband of `35`, matching the MATLAB script and reducing second-layer idle noise spikes.
+
+11. **[Cleanup]** Removed real-hardware controls from the simulated FSR page.
+   - `frontend/fsr-demo.html` is again focused on virtual ADC/MUX/SPI simulation.
+   - Real COM-port workflows now live in the dedicated hardware console.
+
+## 2026-06-28 - Add Hardware Live FSR Display and Local Firmware Tooling
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Feature]** Added real-hardware FSR visualization to the FSR readout page.
+   - `frontend/fsr-demo.html` now includes a `Real Hardware FSR` control block for selecting serial port, firmware protocol, FSR layer, live streaming, and tare.
+   - The newly added `2D FSR Heatmap` and `3D FSR Surface` panels now use physical Teensy serial frames only.
+   - These hardware plots no longer fall back to simulated object-placement data; if hardware is offline, they stay in a hardware idle/waiting state.
+
+2. **[Logic]** Added backend hardware-frame APIs for connected e-skin boards.
+   - `POST /api/fsr-hardware-frame` reads live FSR frames from a serial-connected Teensy at 500000 baud.
+   - `POST /api/fsr-hardware-tare` captures baseline frames and returns delta values for subsequent live visualization.
+   - The backend supports `fsr-serial`, `eskin-fsr`, and `eskin-combined` protocols, matching the original `fsr_adc_plexed_serial.ino` and `Eskin.ino` firmware formats.
+   - Hardware payloads include raw values, normalized display values, selected layer, timestamp, protocol metadata, baseline state, maximum value, and estimated hardware FPS.
+
+3. **[Feature]** Added one-click firmware upload controls to the dashboard.
+   - `frontend/index.html` now includes a `One-click Firmware` card with `Burn FSR` and `Burn Combo` buttons.
+   - `POST /api/flash-firmware` compiles and uploads only the fixed, approved firmware targets: FSR-only and combined FSR+ACC.
+   - The API reports compile/upload stage, command output, target sketch, port, FQBN, and actionable error messages.
+
+4. **[Environment]** Installed and relocated Arduino CLI for Teensy firmware workflows.
+   - Arduino CLI 1.5.1 was installed at `D:\study\Programing\arduino\arduino-cli.exe`.
+   - The previous `D:\Arduino\arduino-cli` copy was removed after the new location was verified.
+   - User PATH was updated to include `D:\study\Programing\arduino`.
+   - Teensy board support `teensy:avr 1.62.0` was verified, including `teensy:avr:teensy41` for Teensy 4.1.
+   - `backend/server.py` now has a fallback path to the new Arduino CLI location so the web upload button works even before a terminal PATH refresh.
+
+5. **[Environment]** Added local Python support for hardware recording and serial readout.
+   - `pyserial` was installed for the Python environment used by the local backend so `/api/fsr-hardware-frame` can access COM ports.
+   - A local `.venv-record/` environment was created for original hardware data collection scripts.
+   - The local record environment includes serial/data tooling used by the original e-skin scripts, including `pyserial`, `numpy`, `keyboard`, and `scipy`.
+   - The `.venv-record/` folder remains ignored by Git.
+
+6. **[Tooling]** Added local hardware recording helpers for FSR and combined FSR+ACC capture.
+   - `tools/record/record.py` supports `fsr-serial`, `eskin-fsr`, and `eskin-combined` acquisition modes.
+   - `tools/record/original_scripts/` contains copied/adapted original scripts for MATLAB and Python visualization workflows.
+   - `serialComEskinCombined.m` was adapted for combined mode `0xD0`, 100-frame tare, hardware FPS display, UI FPS display, and tunable layer deadband/gain.
+   - `run_commands.txt` records concise local commands for listing ports, recording data, and running the original visualization scripts.
+   - `tools/` and `.venv-record/` remain local ignored directories and are not intended for normal software-repository pushes.
+
+7. **[Appearance]** Added and refined FSR readout visualization panels.
+   - The FSR page now has separate right-side canvas panels for 2D heatmap and 3D surface display.
+   - The readout sidebar can be collapsed from an edge arrow instead of a separate toolbar button.
+   - The FSR demo height and scroll behavior were adjusted to better fill the browser viewport.
+
+8. **[Logic]** Continued FSR scan-path refinement for the simulator mode.
+   - The simulator scan flow distinguishes one-cell, one-row, and full-frame backend responses according to refresh-rate ranges.
+   - Manual ADC MOSI playback can animate returned MISO words into the FSR scan display.
+   - The SPI transfer summary was simplified to focus on MCU-to-ADC and MCU-to-FPGA line throughput.
+
 ## 2026-06-03 - Add ngspice ACC Drive and Backend Subpackages
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

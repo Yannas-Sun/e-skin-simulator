@@ -1,5 +1,6 @@
 const demo = {
   row: 1,
+  scanCol: 1,
   objectRow: 8,
   col: 8,
   objectSize: 72,
@@ -11,10 +12,18 @@ const demo = {
   fifoPlayback: null,
   updateInFlight: false,
   pendingUpdate: false,
+  scanTick: 0,
   hardware: null,
   mosiResult: null,
   placingObject: false,
   receivedCodes: Array.from({ length: 16 }, () => Array(16).fill(null)),
+  hardwareLive: {
+    enabled: false,
+    timer: null,
+    frame: null,
+    inFlight: false,
+    lastError: null,
+  },
 };
 
 const HEATMAP_DETECTION_OFFSET = 2;
@@ -38,6 +47,21 @@ const manualMosi = document.getElementById("manualMosi");
 const runMosi = document.getElementById("runMosi");
 const mosiStatus = document.getElementById("mosiStatus");
 const misoOutput = document.getElementById("misoOutput");
+const fsrDemoGrid = document.getElementById("fsrDemoGrid");
+const toggleReadoutPanel = document.getElementById("toggleReadoutPanel");
+const fsrHeatmap2d = document.getElementById("fsrHeatmap2d");
+const fsrHeatmapCtx = fsrHeatmap2d?.getContext("2d");
+const fsrSurface3d = document.getElementById("fsrSurface3d");
+const fsrSurfaceCtx = fsrSurface3d?.getContext("2d");
+const hardwarePort = document.getElementById("hardwarePort");
+const hardwareProtocol = document.getElementById("hardwareProtocol");
+const hardwareLayer = document.getElementById("hardwareLayer");
+const hardwareLiveState = document.getElementById("hardwareLiveState");
+const hardwareLiveStatus = document.getElementById("hardwareLiveStatus");
+const toggleHardwareLive = document.getElementById("toggleHardwareLive");
+const tareHardwareFsr = document.getElementById("tareHardwareFsr");
+const fsrHeatmapSource = document.getElementById("fsrHeatmapSource");
+const fsrSurfaceSource = document.getElementById("fsrSurfaceSource");
 
 const layout = {
   dmuxX: 70,
@@ -135,12 +159,29 @@ function formatRate(value, unit) {
   return `${value.toFixed(0)} b/s`;
 }
 
+function formatBitAndByteRate(bitsPerSecond) {
+  const bits = Number(bitsPerSecond) || 0;
+  const bytes = bits / 8;
+  const bitText = bits >= 1_000_000
+    ? `${(bits / 1_000_000).toFixed(2)} Mb/s`
+    : bits >= 1000
+      ? `${(bits / 1000).toFixed(1)} kb/s`
+      : `${bits.toFixed(0)} bit/s`;
+  const byteText = bytes >= 1_000_000
+    ? `${(bytes / 1_000_000).toFixed(2)} MB/s`
+    : bytes >= 1000
+      ? `${(bytes / 1000).toFixed(1)} kB/s`
+      : `${bytes.toFixed(1)} B/s`;
+  return `${bitText} (${byteText})`;
+}
+
 async function fetchHardwareRow(row) {
   const response = await fetch("/api/fsr-readout", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       row,
+      scanCol: demo.scanCol,
       objectRow: demo.objectRow,
       col: demo.col,
       objectSize: demo.objectSize,
@@ -153,11 +194,9 @@ async function fetchHardwareRow(row) {
 
 async function requestHardwareState() {
   if (scanVisualizationMode() === "direct") {
-    for (let row = 1; row <= 16; row += 1) {
-      const rowState = await fetchHardwareRow(row);
-      demo.hardware = rowState;
-      await applyScannedRowCells(rowState, false);
-    }
+    const frameState = await fetchHardwareRow(demo.row);
+    demo.hardware = frameState;
+    applyScannedFrame(frameState);
     stopFifoPlayback();
     demo.fifoPlayback = {
       active: false,
@@ -194,8 +233,8 @@ async function requestManualMosi() {
 function drawCircuit() {
   if (!demo.hardware) return;
   svgEl.innerHTML = "";
-  const columns = demo.hardware.columns;
-  const active = columns[demo.col - 1];
+  const columns = displayColumns();
+  const active = activePanelColumn(columns);
   const root = svg("g");
   svgEl.appendChild(root);
 
@@ -216,45 +255,275 @@ function drawCircuit() {
   objectMassValue.textContent = `${demo.objectMass} g`;
   refreshRateValue.textContent = `${demo.refreshRate} Hz`;
   refreshRateNote.textContent = refreshRateExplanation();
-  scanState.textContent = demo.auto ? "auto scan" : "manual";
+  scanState.textContent = demo.auto ? `auto scan #${demo.scanTick}` : "manual";
   svgEl.classList.toggle("no-animation", demo.refreshRate > 100);
   renderAdcInputTable();
   const rates = demo.hardware.mcu.lineRates;
   const uplink = demo.hardware.moduleUplink;
   const uplinkRates = uplink.lineRates;
   const spiLines = [
-    `Internal ADC SPI, ADC -> STM32G474`,
-    `ELECTRICAL_SOLVER = ${demo.hardware.electricalSolver?.engine || "python"} (${demo.hardware.electricalSolver?.detail || "closed-form voltage divider"})`,
-    `REFRESH = ${demo.hardware.mcu.framesPerSecond.toFixed(0)} full 16x16 frame/s`,
-    `COUNTED = ${demo.hardware.mcu.rowsCounted} row scans/frame`,
+    `MCU <-> ADC SPI`,
+    `Address: ${formatBitAndByteRate(rates.Address.perSecond)}`,
+    `SCK: ${formatBitAndByteRate(rates.SCK.perSecond)}`,
+    `MOSI: ${formatBitAndByteRate(rates.MOSI.perSecond)}`,
+    `MISO: ${formatBitAndByteRate(rates.MISO.perSecond)}`,
+    `CS: ${formatBitAndByteRate(rates.CS.edgesPerSecond)}`,
     ``,
-    `Line          per frame        per second`,
-    `Address       ${rates.Address.perFrame.toFixed(0).padStart(5)} bit       ${formatRate(rates.Address.perSecond, rates.Address.unit)}`,
-    `SCK           ${rates.SCK.perFrame.toFixed(0).padStart(5)} pulse     ${formatRate(rates.SCK.perSecond, rates.SCK.unit)}`,
-    `MOSI          ${rates.MOSI.perFrame.toFixed(0).padStart(5)} bit       ${formatRate(rates.MOSI.perSecond, rates.MOSI.unit)}`,
-    `MISO          ${rates.MISO.perFrame.toFixed(0).padStart(5)} bit       ${formatRate(rates.MISO.perSecond, rates.MISO.unit)}`,
-    `CS            ${rates.CS.perFrame.toFixed(0).padStart(5)} assert    ${formatRate(rates.CS.perSecond, rates.CS.unit)}`,
-    `CS edges      ${rates.CS.edgesPerFrame.toFixed(0).padStart(5)} edge      ${rates.CS.edgesPerSecond.toFixed(0)} edge/s`,
-    ``,
-    `MAX11632 setup: ${demo.hardware.adc.setupCommand.hex} ${demo.hardware.adc.setupCommand.binary}`,
-    `MAX11632 averaging: ${demo.hardware.adc.averagingCommand.hex} ${demo.hardware.adc.averagingCommand.binary}`,
-    `MAX11632 reset byte ref: ${demo.hardware.adc.resetCommand.hex} ${demo.hardware.adc.resetCommand.binary}`,
-    `MAX11632 conversion: ${demo.hardware.spi.command.hex} ${demo.hardware.spi.command.binary}`,
-    `FIFO output: 16 x 16-bit words, each 0000 + 12-bit ADC code`,
-    ``,
-    `Module uplink SPI, STM32G474 -> ${uplink.upperLayer}`,
-    `MODE = ${uplink.mode}`,
-    `COMMAND = ${uplink.command.label}, ${uplink.command.bits} bit/frame`,
-    `RESULT = ${uplink.samplesPerFrame} samples x ${uplink.sampleBits} bit + ${uplink.metadataBytes} B metadata`,
-    `Required SCK = ${formatRate(uplink.clock.requiredSckHz, "pulse")}`,
-    ``,
-    `Line          per frame        per second`,
-    `SCK           ${uplinkRates.SCK.perFrame.toFixed(0).padStart(5)} pulse     ${formatRate(uplinkRates.SCK.perSecond, uplinkRates.SCK.unit)}`,
-    `MOSI          ${uplinkRates.MOSI.perFrame.toFixed(0).padStart(5)} bit       ${formatRate(uplinkRates.MOSI.perSecond, uplinkRates.MOSI.unit)}`,
-    `MISO          ${uplinkRates.MISO.perFrame.toFixed(0).padStart(5)} bit       ${formatRate(uplinkRates.MISO.perSecond, uplinkRates.MISO.unit)}`,
-    `CS            ${uplinkRates.CS.perFrame.toFixed(0).padStart(5)} assert    ${formatRate(uplinkRates.CS.perSecond, uplinkRates.CS.unit)}`,
+    `MCU <-> FPGA SPI`,
+    `SCK: ${formatBitAndByteRate(uplinkRates.SCK.perSecond)}`,
+    `MOSI: ${formatBitAndByteRate(uplinkRates.MOSI.perSecond)}`,
+    `MISO: ${formatBitAndByteRate(uplinkRates.MISO.perSecond)}`,
+    `CS: ${formatBitAndByteRate(uplinkRates.CS.edgesPerSecond)}`,
   ];
   spiFrame.textContent = spiLines.join("\n");
+  renderFsrVisuals();
+  updateHardwareLiveLabels();
+}
+
+function heatColor(value, alpha = 1) {
+  if (value <= 0) return `rgba(230, 244, 239, ${alpha})`;
+  if (value < 0.35) return `rgba(${Math.round(91 + value * 180)}, ${Math.round(184 - value * 50)}, 199, ${alpha})`;
+  if (value < 0.72) return `rgba(${Math.round(230 + value * 20)}, ${Math.round(194 - value * 80)}, 58, ${alpha})`;
+  return `rgba(215, ${Math.round(96 - value * 45)}, 69, ${alpha})`;
+}
+
+function scannedIntensityGrid() {
+  return Array.from({ length: 16 }, (_, row) =>
+    Array.from({ length: 16 }, (_, col) => heatmapIntensity(demo.receivedCodes[row][col]))
+  );
+}
+
+function visualIntensityGrid() {
+  if (demo.hardwareLive.frame?.normalized) {
+    return demo.hardwareLive.frame.normalized;
+  }
+  return Array.from({ length: 16 }, () => Array(16).fill(0));
+}
+
+function visualSourceLabel() {
+  if (!demo.hardwareLive.enabled) return "hardware idle";
+  if (demo.hardwareLive.frame?.normalized) return "live hardware frame";
+  return "waiting for hardware";
+}
+
+function renderFsrVisuals() {
+  renderFsrHeatmap2d();
+  renderFsrSurface3d();
+}
+
+function renderFsrHeatmap2d() {
+  if (!fsrHeatmapCtx || !fsrHeatmap2d) return;
+  const ctx = fsrHeatmapCtx;
+  const width = fsrHeatmap2d.width;
+  const height = fsrHeatmap2d.height;
+  const cell = width / 16;
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "#f8fbf9";
+  ctx.fillRect(0, 0, width, height);
+
+  const grid = visualIntensityGrid();
+  for (let row = 0; row < 16; row += 1) {
+    for (let col = 0; col < 16; col += 1) {
+      ctx.fillStyle = heatColor(grid[row][col]);
+      ctx.fillRect(col * cell, row * cell, cell - 1, cell - 1);
+    }
+  }
+
+  ctx.strokeStyle = "rgba(34, 91, 84, 0.32)";
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 16; i += 1) {
+    ctx.beginPath();
+    ctx.moveTo(i * cell, 0);
+    ctx.lineTo(i * cell, height);
+    ctx.moveTo(0, i * cell);
+    ctx.lineTo(width, i * cell);
+    ctx.stroke();
+  }
+
+  const col = Math.max(1, Math.min(16, fifoCursorCol()));
+  ctx.strokeStyle = "#1e8aa5";
+  ctx.lineWidth = 3;
+  ctx.strokeRect((col - 1) * cell + 1, (demo.row - 1) * cell + 1, cell - 3, cell - 3);
+}
+
+function renderFsrSurface3d() {
+  if (!fsrSurfaceCtx || !fsrSurface3d) return;
+  const ctx = fsrSurfaceCtx;
+  const width = fsrSurface3d.width;
+  const height = fsrSurface3d.height;
+  const grid = visualIntensityGrid();
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "#f8fbf9";
+  ctx.fillRect(0, 0, width, height);
+
+  const originX = width / 2;
+  const originY = height * 0.75;
+  const dx = 11;
+  const dy = 5.8;
+  const maxH = 86;
+  const cellW = 10;
+  const cellH = 5;
+  const cells = [];
+
+  for (let row = 0; row < 16; row += 1) {
+    for (let col = 0; col < 16; col += 1) {
+      const value = grid[row][col];
+      cells.push({
+        value,
+        x: originX + (col - row) * dx,
+        y: originY + (col + row - 15) * dy,
+        z: value * maxH,
+      });
+    }
+  }
+
+  for (const cell of cells) {
+    const topY = cell.y - cell.z;
+    ctx.strokeStyle = cell.value > 0.02 ? "rgba(43, 61, 57, 0.38)" : "rgba(43, 61, 57, 0.10)";
+    ctx.beginPath();
+    ctx.moveTo(cell.x, cell.y);
+    ctx.lineTo(cell.x, topY);
+    ctx.stroke();
+
+    ctx.fillStyle = heatColor(cell.value, cell.value > 0 ? 0.92 : 0.45);
+    ctx.beginPath();
+    ctx.moveTo(cell.x, topY - cellH);
+    ctx.lineTo(cell.x + cellW, topY);
+    ctx.lineTo(cell.x, topY + cellH);
+    ctx.lineTo(cell.x - cellW, topY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = "#66726e";
+  ctx.font = "11px system-ui";
+  ctx.fillText("Teensy hardware FSR surface", 12, height - 12);
+}
+
+function hardwarePayload() {
+  return {
+    port: hardwarePort?.value || "COM5",
+    baud: 500000,
+    protocol: hardwareProtocol?.value || "fsr-serial",
+    layer: hardwareLayer?.value || "0",
+    n: 16,
+    displayLimit: 300,
+    deadband: hardwareLayer?.value === "1" ? 35 : 8,
+  };
+}
+
+function hardwarePollInterval() {
+  return Math.max(30, Math.min(1000, 1000 / Math.max(1, demo.refreshRate)));
+}
+
+async function fetchHardwareLiveFrame() {
+  const response = await fetch("/api/fsr-hardware-frame", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(hardwarePayload()),
+  });
+  const result = await response.json();
+  if (!response.ok || !result.ok) throw new Error(result.error || "Hardware frame unavailable");
+  return result;
+}
+
+async function closeHardwareLiveSession(port = "") {
+  try {
+    await fetch("/api/fsr-hardware-close", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(port ? { port } : {}),
+    });
+  } catch (error) {
+    console.warn("Hardware close failed", error);
+  }
+}
+
+async function runHardwareLiveTick() {
+  if (!demo.hardwareLive.enabled || demo.hardwareLive.inFlight) return;
+  demo.hardwareLive.inFlight = true;
+  try {
+    demo.hardwareLive.frame = await fetchHardwareLiveFrame();
+    demo.hardwareLive.lastError = null;
+    renderFsrVisuals();
+  } catch (error) {
+    demo.hardwareLive.lastError = error.message;
+  } finally {
+    demo.hardwareLive.inFlight = false;
+    updateHardwareLiveLabels();
+  }
+}
+
+function restartHardwareLiveTimer() {
+  if (demo.hardwareLive.timer) window.clearInterval(demo.hardwareLive.timer);
+  demo.hardwareLive.timer = null;
+  if (!demo.hardwareLive.enabled) return;
+  runHardwareLiveTick();
+  demo.hardwareLive.timer = window.setInterval(runHardwareLiveTick, hardwarePollInterval());
+}
+
+async function toggleHardwareLiveMode() {
+  const wasEnabled = demo.hardwareLive.enabled;
+  demo.hardwareLive.enabled = !demo.hardwareLive.enabled;
+  if (!demo.hardwareLive.enabled) {
+    if (wasEnabled) await closeHardwareLiveSession(hardwarePort?.value || "");
+    demo.hardwareLive.frame = null;
+    demo.hardwareLive.lastError = null;
+  }
+  restartHardwareLiveTimer();
+  renderFsrVisuals();
+  updateHardwareLiveLabels();
+}
+
+async function tareHardwareFrame() {
+  if (!tareHardwareFsr) return;
+  tareHardwareFsr.disabled = true;
+  hardwareLiveStatus.textContent = "Capturing hardware tare frames...";
+  try {
+    const response = await fetch("/api/fsr-hardware-tare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...hardwarePayload(), frames: 20 }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.error || "Tare failed");
+    hardwareLiveStatus.textContent = `Tare complete: ${result.frames} frame(s).`;
+    await runHardwareLiveTick();
+  } catch (error) {
+    demo.hardwareLive.lastError = error.message;
+    updateHardwareLiveLabels();
+  } finally {
+    tareHardwareFsr.disabled = false;
+  }
+}
+
+function updateHardwareLiveLabels() {
+  const source = visualSourceLabel();
+  if (fsrHeatmapSource) fsrHeatmapSource.textContent = source;
+  if (fsrSurfaceSource) fsrSurfaceSource.textContent = source;
+  if (toggleHardwareLive) toggleHardwareLive.classList.toggle("active", demo.hardwareLive.enabled);
+  if (!hardwareLiveState || !hardwareLiveStatus) return;
+
+  if (!demo.hardwareLive.enabled) {
+    hardwareLiveState.textContent = "offline";
+    hardwareLiveStatus.textContent = "2D/3D FSR plots use live Teensy frames when enabled.";
+    return;
+  }
+  if (demo.hardwareLive.lastError) {
+    hardwareLiveState.textContent = "error";
+    hardwareLiveStatus.textContent = demo.hardwareLive.lastError;
+    return;
+  }
+  const frame = demo.hardwareLive.frame;
+  if (!frame) {
+    hardwareLiveState.textContent = "connecting";
+    hardwareLiveStatus.textContent = `Opening ${hardwarePayload().port} at 500000 baud...`;
+    return;
+  }
+  hardwareLiveState.textContent = "live";
+  const fps = frame.hardwareFps ? `${frame.hardwareFps.toFixed(1)} FPS` : "FPS pending";
+  hardwareLiveStatus.textContent = `${frame.protocol} ${frame.port}, ${fps}, max ${frame.maxValue.toFixed(1)}, baseline ${frame.baselineReady ? "on" : "raw"}.`;
 }
 
 function manualMosiLines(result) {
@@ -271,9 +540,12 @@ function manualMosiLines(result) {
       `   ${tx.decoded.tableRow}: ${tx.effect}`,
     );
     if (tx.misoWords.length) {
-      lines.push(`   MISO:`);
-      for (const word of tx.misoWords) {
-        lines.push(`   ${word.hex} ${word.binary} bytes=[${word.bytes.join(", ")}]`);
+      const preview = tx.misoWords.length > 6
+        ? [...tx.misoWords.slice(0, 4), { hex: "...", binary: `${tx.misoWords.length - 5} more word(s)` }, tx.misoWords[tx.misoWords.length - 1]]
+        : tx.misoWords;
+      lines.push(`   MISO: ${tx.misoWords.length} word(s)`);
+      for (const word of preview) {
+        lines.push(`   ${word.ain || ""} ${word.hex} ${word.binary}`.trim());
       }
     } else {
       lines.push(`   MISO: idle`);
@@ -471,9 +743,9 @@ function refreshRateExplanation() {
     return `>10 Hz: scan animation is disabled. The heatmap is written directly from scanned ADC/FIFO data at ${demo.refreshRate} full 16x16 frame/s.`;
   }
   if (demo.refreshRate > 1) {
-    return `1-10 Hz: only row scanning is visualized. Display runs at 1/16 hardware speed, so one visible row step takes ${(1 / demo.refreshRate).toFixed(3)} s.`;
+    return `1-10 Hz: one backend response carries one row. Timer = ${(1000 / (demo.refreshRate * 16)).toFixed(1)} ms/row, so ${demo.refreshRate} full 16x16 frame/s.`;
   }
-  return `1 Hz: full FIFO playback is visualized at 1/16 hardware speed: 16 s per visible 16x16 frame, 1 s per row, 1/16 s per column.`;
+  return `1 Hz: one backend response carries one ADC cell. Timer = ${(1000 / 256).toFixed(1)} ms/cell, so one full 16x16 frame is scanned per second.`;
 }
 
 function drawPressureObject(root) {
@@ -509,7 +781,46 @@ function heatmapIntensity(code) {
   return Math.max(0, Math.min(1, signal / 1800));
 }
 
+function displayColumns() {
+  return demo.hardware?.columns || [];
+}
+
+function activePanelColumn(columns) {
+  if (demo.hardware?.adcColumn?.column) return demo.hardware.adcColumn.column;
+  return columns[demo.col - 1] || columns[0] || {
+    fsrOhms: 0,
+    nodeVoltage: 0,
+    code: 0,
+  };
+}
+
 async function showScanResult(hardware, forceFifo = false) {
+  if (hardware.responseMode === "cell") {
+    stopFifoPlayback();
+    demo.fifoPlayback = {
+      active: true,
+      row: hardware.row,
+      col: hardware.scanCol,
+      words: hardware.spi?.words?.slice(0, 1) || [],
+      mode: "cell",
+    };
+    applyScannedCell(hardware);
+    drawCircuit();
+    return;
+  }
+  if (hardware.responseMode === "frame") {
+    stopFifoPlayback();
+    demo.fifoPlayback = {
+      active: false,
+      row: null,
+      col: null,
+      words: [],
+      mode: "direct",
+    };
+    applyScannedFrame(hardware);
+    drawCircuit();
+    return;
+  }
   const mode = forceFifo ? "fifo" : scanVisualizationMode();
   if (mode === "fifo") {
     startFifoPlayback(hardware);
@@ -523,8 +834,8 @@ async function showScanResult(hardware, forceFifo = false) {
     words: hardware.spi?.words?.slice(0, 16) || [],
     mode,
   };
-  await applyScannedRowCells(hardware, mode === "row");
-  if (mode !== "row") drawCircuit();
+  await applyScannedRowCells(hardware, false);
+  drawCircuit();
 }
 
 function scanVisualizationMode() {
@@ -534,7 +845,7 @@ function scanVisualizationMode() {
 }
 
 function isMuxScanVisible() {
-  return scanVisualizationMode() !== "direct" || demo.fifoPlayback?.mode === "fifo";
+  return scanVisualizationMode() !== "direct" || ["fifo", "cell", "manual"].includes(demo.fifoPlayback?.mode);
 }
 
 function applyScannedRow(hardware) {
@@ -542,6 +853,25 @@ function applyScannedRow(hardware) {
   const words = hardware.spi?.words || [];
   if (rowIndex < 0 || rowIndex >= 16 || words.length !== 16) return;
   demo.receivedCodes[rowIndex] = words.slice(0, 16);
+}
+
+function applyScannedCell(hardware) {
+  const rowIndex = hardware.row - 1;
+  const colIndex = (hardware.scanCol || hardware.adcColumn?.col || 1) - 1;
+  const word = hardware.adcColumn?.word ?? hardware.spi?.words?.[0];
+  if (rowIndex < 0 || rowIndex >= 16 || colIndex < 0 || colIndex >= 16 || word === undefined) return;
+  demo.receivedCodes[rowIndex][colIndex] = word;
+}
+
+function applyScannedFrame(hardware) {
+  if (!hardware.frame?.rows?.length) return;
+  for (const rowState of hardware.frame.rows) {
+    const rowIndex = rowState.row - 1;
+    if (rowIndex < 0 || rowIndex >= 16 || !Array.isArray(rowState.words)) continue;
+    for (let colIndex = 0; colIndex < Math.min(16, rowState.words.length); colIndex += 1) {
+      demo.receivedCodes[rowIndex][colIndex] = rowState.words[colIndex];
+    }
+  }
 }
 
 async function applyScannedRowCells(hardware, renderEachCell) {
@@ -609,7 +939,7 @@ function applyFifoWord() {
 }
 
 function fifoCursorCol() {
-  if (!demo.fifoPlayback?.active || demo.fifoPlayback.mode !== "fifo" || demo.fifoPlayback.row !== demo.row) return null;
+  if (!demo.fifoPlayback?.active || !["fifo", "cell", "manual"].includes(demo.fifoPlayback.mode) || demo.fifoPlayback.row !== demo.row) return null;
   return demo.fifoPlayback.col;
 }
 
@@ -666,18 +996,19 @@ function endObjectPlacement() {
 
 async function updateDemo() {
   if (demo.updateInFlight) {
-    demo.pendingUpdate = true;
     return;
   }
   demo.updateInFlight = true;
-  await requestHardwareState();
-  demo.updateInFlight = false;
-  if (demo.pendingUpdate) {
-    demo.pendingUpdate = false;
-    updateDemo();
-    return;
+  try {
+    await requestHardwareState();
+    demo.scanTick += 1;
+    if (demo.auto) advanceScanCursor();
+  } catch (error) {
+    // Keep the auto scanner recoverable if one backend request fails.
+    console.error("FSR scan update failed", error);
+  } finally {
+    demo.updateInFlight = false;
   }
-  scheduleNextAutoRow();
 }
 
 function syncFromControls() {
@@ -686,6 +1017,7 @@ function syncFromControls() {
   demo.refreshRate = Number(refreshRateRange.value);
   drawCircuit();
   restartAutoScanTimer();
+  restartHardwareLiveTimer();
 }
 
 async function runManualMosi() {
@@ -717,7 +1049,13 @@ function playManualMisoResult(result) {
     drawCircuit();
     return;
   }
-  const words = result.misoWords.slice(-16).map((word) => word.value);
+  const words = demo.hardware.spi?.words?.slice(0, 16) || Array(16).fill(null);
+  for (const word of result.misoWords) {
+    const channel = Number(word.channel);
+    if (Number.isInteger(channel) && channel >= 1 && channel <= 16) {
+      words[channel - 1] = word.value;
+    }
+  }
   const hardware = {
     ...demo.hardware,
     row: result.row,
@@ -727,7 +1065,84 @@ function playManualMisoResult(result) {
     },
   };
   demo.row = result.row;
-  showScanResult(hardware, true);
+  demo.hardware = hardware;
+  startManualMisoPlayback(result, hardware, words);
+}
+
+function startManualMisoPlayback(result, hardware, baseWords) {
+  stopFifoPlayback();
+  const frames = result.misoWords
+    .map((word, index) => ({
+      index,
+      channel: Number(word.channel),
+      value: Number(word.value),
+      binary: word.binary,
+      hex: word.hex,
+      ain: word.ain,
+    }))
+    .filter((word) => Number.isInteger(word.channel) && word.channel >= 1 && word.channel <= 16);
+  if (!frames.length) {
+    drawCircuit();
+    return;
+  }
+
+  let frameIndex = 0;
+  const words = baseWords.slice(0, 16);
+  const applyFrame = () => {
+    const frame = frames[frameIndex];
+    words[frame.channel - 1] = frame.value;
+    demo.receivedCodes[result.row - 1][frame.channel - 1] = frame.value;
+    demo.fifoPlayback = {
+      active: true,
+      row: result.row,
+      col: frame.channel,
+      words,
+      mode: "manual",
+    };
+    demo.hardware = {
+      ...hardware,
+      spi: {
+        ...hardware.spi,
+        words,
+      },
+    };
+    mosiStatus.textContent = `animating MISO ${frameIndex + 1}/${frames.length}: ${frame.ain || `AIN${frame.channel - 1}`} ${frame.hex}`;
+    drawCircuit();
+    frameIndex += 1;
+    if (frameIndex >= frames.length) {
+      window.clearInterval(demo.fifoTimer);
+      demo.fifoTimer = null;
+      demo.fifoPlayback = {
+        active: false,
+        row: result.row,
+        col: null,
+        words,
+        mode: "manual",
+      };
+      mosiStatus.textContent = `done: ${frames.length} MISO word(s) animated`;
+      drawCircuit();
+    }
+  };
+
+  applyFrame();
+  if (frames.length > 1) {
+    demo.fifoTimer = window.setInterval(applyFrame, manualPlaybackInterval());
+  }
+}
+
+function manualPlaybackInterval() {
+  return 120;
+}
+
+function applyManualMisoWords(result) {
+  const rowIndex = result.row - 1;
+  if (rowIndex < 0 || rowIndex >= 16) return;
+  for (const word of result.misoWords) {
+    const channel = Number(word.channel);
+    if (Number.isInteger(channel) && channel >= 1 && channel <= 16) {
+      demo.receivedCodes[rowIndex][channel - 1] = word.value;
+    }
+  }
 }
 
 function stepRow() {
@@ -735,38 +1150,61 @@ function stepRow() {
   updateDemo();
 }
 
+function advanceScanCursor() {
+  const mode = scanVisualizationMode();
+  if (mode === "direct") return;
+  if (mode === "row") {
+    demo.row = demo.row === 16 ? 1 : demo.row + 1;
+    return;
+  }
+  if (demo.scanCol >= 16) {
+    demo.scanCol = 1;
+    demo.row = demo.row === 16 ? 1 : demo.row + 1;
+  } else {
+    demo.scanCol += 1;
+  }
+}
+
+function stepCell() {
+  advanceScanCursor();
+  updateDemo();
+}
+
 function toggleAutoScan() {
   demo.auto = !demo.auto;
   document.getElementById("autoScan").classList.toggle("active", demo.auto);
-  updateDemo();
   restartAutoScanTimer();
 }
 
+function toggleReadoutVisibility() {
+  const hidden = fsrDemoGrid.classList.toggle("readout-hidden");
+  toggleReadoutPanel.textContent = hidden ? "‹" : "›";
+  toggleReadoutPanel.setAttribute("aria-label", hidden ? "Show readout panel" : "Hide readout panel");
+  toggleReadoutPanel.setAttribute("aria-expanded", String(!hidden));
+}
+
 function restartAutoScanTimer() {
-  if (demo.timer) window.clearTimeout(demo.timer);
+  if (demo.timer) window.clearInterval(demo.timer);
   demo.timer = null;
   if (!demo.auto) {
     return;
   }
-  scheduleNextAutoRow();
+  updateDemo();
+  demo.timer = window.setInterval(updateDemo, autoScanDelay());
 }
 
 function scheduleNextAutoRow() {
-  if (demo.timer) window.clearTimeout(demo.timer);
-  demo.timer = null;
-  if (!demo.auto || demo.fifoPlayback?.active || demo.updateInFlight) {
-    return;
-  }
-  demo.timer = window.setTimeout(scanVisualizationMode() === "direct" ? updateDemo : stepRow, autoScanDelay());
+  restartAutoScanTimer();
 }
 
 function autoScanDelay() {
-  if (demo.refreshRate > 10) return Math.max(10, 1000 / demo.refreshRate);
-  return 0;
+  if (demo.refreshRate > 10) return 1000 / Math.max(1, demo.refreshRate);
+  if (demo.refreshRate <= 1) return cellUploadInterval();
+  return 1000 / (Math.max(1, demo.refreshRate) * 16);
 }
 
 function cellUploadInterval() {
-  return (1000 / Math.max(1, demo.refreshRate)) / 16;
+  return 1000 / (Math.max(1, demo.refreshRate) * 256);
 }
 
 objectSizeRange.addEventListener("input", syncFromControls);
@@ -776,6 +1214,20 @@ svgEl.addEventListener("pointerdown", beginObjectPlacement);
 window.addEventListener("pointermove", updateObjectPlacement);
 window.addEventListener("pointerup", endObjectPlacement);
 document.getElementById("autoScan").addEventListener("click", toggleAutoScan);
+toggleReadoutPanel.addEventListener("click", toggleReadoutVisibility);
 runMosi.addEventListener("click", runManualMosi);
+toggleHardwareLive?.addEventListener("click", toggleHardwareLiveMode);
+tareHardwareFsr?.addEventListener("click", tareHardwareFrame);
+[hardwarePort, hardwareProtocol, hardwareLayer].forEach((control) => {
+  if (!control) return;
+  control.addEventListener("change", async () => {
+    await closeHardwareLiveSession();
+    demo.hardwareLive.frame = null;
+    demo.hardwareLive.lastError = null;
+    restartHardwareLiveTimer();
+    renderFsrVisuals();
+    updateHardwareLiveLabels();
+  });
+});
 
 updateDemo();
