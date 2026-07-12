@@ -72,7 +72,8 @@ Combined, delta, and triggered scanning
 ```
 
 The uploader copies the selected sketch directory into
-`.codex_firmware_build/`, modifies only that temporary copy, invokes
+`%TEMP%/e-skin-simulator/firmware-build/`, modifies only that temporary copy,
+invokes
 `D:/study/Programing/arduino/arduino-cli.exe`, and then removes the temporary
 build. The original hardware source is never rewritten by the web uploader.
 
@@ -96,11 +97,11 @@ It reads the same physical serial protocols but is not imported by the server.
 These paths are reproducible and must not be committed:
 
 ```text
-.venv-record/             Optional acquisition environment
-.codex_firmware_build/    Temporary firmware copies and compiler output
-.codex_serial_meter/      One-second serial byte meter
+tools/acquisition/.venv/  Optional acquisition environment
+%TEMP%/e-skin-simulator/  Firmware copies and one-second serial byte meter
 __pycache__/ and *.pyc    Python bytecode
 *.mat                     Recorded experiment output
+.agents/ and .codex/      Local Codex session metadata, not application source
 ```
 
 ## Source-of-truth rules
@@ -109,5 +110,5 @@ __pycache__/ and *.pyc    Python bytecode
 2. Edit virtual hardware under `backend/fsr/` or `backend/accel/`.
 3. Edit page behavior under `frontend/js/pages/`.
 4. Keep real COM-port behavior in `hardware-live.js`, not simulation pages.
-5. Treat `.codex_*`, virtual environments, bytecode, and recorded data as
-   generated local state.
+5. Treat system-temporary runtime data, virtual environments, bytecode, and
+   recorded data as generated local state.

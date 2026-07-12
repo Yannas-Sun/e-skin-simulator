@@ -7,6 +7,7 @@ import re
 import shutil
 import struct
 import subprocess
+import tempfile
 import threading
 import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -49,8 +50,9 @@ FIRMWARE_TARGETS = {
 }
 DEFAULT_TEENSY_FQBN = "teensy:avr:teensy41"
 LOCAL_ARDUINO_CLI = Path("D:/study/Programing/arduino/arduino-cli.exe")
-FIRMWARE_BUILD_ROOT = ROOT / ".codex_firmware_build"
-SERIAL_METER_ROOT = ROOT / ".codex_serial_meter"
+RUNTIME_ROOT = Path(tempfile.gettempdir()) / "e-skin-simulator"
+FIRMWARE_BUILD_ROOT = RUNTIME_ROOT / "firmware-build"
+SERIAL_METER_ROOT = RUNTIME_ROOT / "serial-meter"
 FSR_HARDWARE_PROTOCOLS = {"fsr-serial", "eskin-fsr", "eskin-combined", "eskin-combined-stream", "eskin-combined-delta"}
 
 

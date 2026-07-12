@@ -1,5 +1,4 @@
 *.log
-.venv-record/
 .DS_Store
 Thumbs.db
 
@@ -8,6 +7,7 @@ prototype/
 tools/*
 !tools/acquisition/
 !tools/acquisition/**
+tools/acquisition/.venv/
 screenshot/
 
 # Keep generated Python state ignored after the acquisition source whitelist.
@@ -20,4 +20,5 @@ __pycache__/
 # Local inspection and generated helper outputs.
 $out
 .codex_*
+.codex/
 .agents/

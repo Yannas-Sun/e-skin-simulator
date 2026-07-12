@@ -6,11 +6,12 @@ simulator runtime.
 
 ## Python environment
 
-The existing local environment is `.venv-record/`. To recreate it:
+The local acquisition environment is kept beside these tools at
+`tools/acquisition/.venv/`. To recreate it:
 
 ```powershell
-python -m venv .venv-record
-.\.venv-record\Scripts\python.exe -m pip install -r tools\acquisition\requirements.txt
+python -m venv tools\acquisition\.venv
+.\tools\acquisition\.venv\Scripts\python.exe -m pip install -r tools\acquisition\requirements.txt
 ```
 
 ## Record serial data
@@ -19,10 +20,10 @@ Run commands from the repository root:
 
 ```powershell
 # FSR + ACC combined firmware
-.\.venv-record\Scripts\python.exe tools\acquisition\record.py COM5 16 data_combined.mat --protocol eskin-combined
+.\tools\acquisition\.venv\Scripts\python.exe tools\acquisition\record.py COM5 16 data_combined.mat --protocol eskin-combined
 
 # FSR-only serial firmware
-.\.venv-record\Scripts\python.exe tools\acquisition\record.py COM5 16 data_fsr.mat --protocol fsr-serial
+.\tools\acquisition\.venv\Scripts\python.exe tools\acquisition\record.py COM5 16 data_fsr.mat --protocol fsr-serial
 ```
 
 Supported protocols:

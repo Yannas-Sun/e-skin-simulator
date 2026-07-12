@@ -24,7 +24,9 @@ Changes are ordered from most important to least important. Each change is label
    - Retained the enhanced Python recorder and unique MATLAB scripts.
    - Removed copied firmware trees that were byte-for-byte duplicates of `../hardware/e-skin_original/src/`.
    - Removed generated sample data, MATLAB autosave files, and duplicate original recorder files from the active tree.
-   - Repaired the ignored local `.venv-record` launcher for the current Python 3.12 runtime and verified its acquisition dependencies.
+   - Moved the ignored acquisition environment from the repository root to `tools/acquisition/.venv`, repaired it for Python 3.12, and verified its dependencies.
+   - Removed root-level server logs, Python caches, and empty local tool directories; the server now starts without writing bytecode or log files into the repository root.
+   - Moved temporary firmware builds and the one-second serial byte meter to `%TEMP%/e-skin-simulator/` so hardware workflows no longer create root-level runtime directories.
 
 5. **[Documentation]** Added explicit structure and source-of-truth documentation.
    - Added `docs/PROJECT_STRUCTURE.md`, `frontend/README.md`, and a rewritten acquisition README.

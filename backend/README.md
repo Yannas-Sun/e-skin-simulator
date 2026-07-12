@@ -35,8 +35,8 @@ The public API paths are still defined in `backend/server.py`:
 | `GET /api/ngspice-health` | ngspice discovery and smoke tests. |
 
 The physical firmware source is intentionally outside this package at
-`../hardware/e-skin_original/src/`. `backend/server.py` copies it into an
-ignored `.codex_firmware_build/` workspace before applying selectable stream
+`../hardware/e-skin_original/src/`. `backend/server.py` copies it into the
+system temporary directory before applying selectable stream
 logic; it never edits the source sketch in place.
 
 The root `server.py` file remains as a launcher so the project can still be started with:
