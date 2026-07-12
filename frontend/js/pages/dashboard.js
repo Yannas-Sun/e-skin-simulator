@@ -44,11 +44,6 @@ const sizeValue = document.getElementById("sizeValue");
 const massValue = document.getElementById("massValue");
 const sampleValue = document.getElementById("sampleValue");
 const selectedShape = document.getElementById("selectedShape");
-const firmwarePort = document.getElementById("firmwarePort");
-const firmwareFqbn = document.getElementById("firmwareFqbn");
-const flashStatus = document.getElementById("flashStatus");
-const flashFsr = document.getElementById("flashFsr");
-const flashCombined = document.getElementById("flashCombined");
 
 function workspacePoint(event) {
   const rect = workspace.getBoundingClientRect();
@@ -1106,48 +1101,6 @@ function setupControls() {
     renderScene();
   });
 
-  flashFsr?.addEventListener("click", () => flashFirmware("fsr"));
-  flashCombined?.addEventListener("click", () => flashFirmware("combined"));
-}
-
-function firmwareLog(result) {
-  const lines = [
-    result.ok ? "Upload complete" : "Upload failed",
-    `target: ${result.label || result.target || "unknown"}`,
-    `port: ${result.port || firmwarePort?.value || "COM5"}`,
-    `fqbn: ${result.fqbn || firmwareFqbn?.value || "teensy:avr:teensy41"}`,
-  ];
-  if (result.sketch) lines.push(`sketch: ${result.sketch}`);
-  if (result.stage) lines.push(`stage: ${result.stage}`);
-  if (result.error) lines.push(`error: ${result.error}`);
-  if (result.hint) lines.push(`hint: ${result.hint}`);
-  if (result.stdout) lines.push("", "stdout:", result.stdout.trim());
-  if (result.stderr) lines.push("", "stderr:", result.stderr.trim());
-  return lines.join("\n");
-}
-
-async function flashFirmware(target) {
-  if (!flashStatus) return;
-  const button = target === "fsr" ? flashFsr : flashCombined;
-  flashStatus.textContent = `Compiling and uploading ${target} firmware...`;
-  button?.setAttribute("disabled", "true");
-  try {
-    const response = await fetch("/api/flash-firmware", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        target,
-        port: firmwarePort?.value || "COM5",
-        fqbn: firmwareFqbn?.value || "teensy:avr:teensy41",
-      }),
-    });
-    const result = await response.json();
-    flashStatus.textContent = firmwareLog(result);
-  } catch (error) {
-    flashStatus.textContent = `Upload failed\nerror: ${error.message}`;
-  } finally {
-    button?.removeAttribute("disabled");
-  }
 }
 
 function boot() {

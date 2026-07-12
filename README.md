@@ -70,9 +70,18 @@ This project is still under active development. The current repository captures 
 - Display counted SPI traffic for address lines, SCK, MOSI, MISO, CS, and the upstream MCU-to-FPGA frame
 - Solve the active-low LIS3DH chip-select electrical layer through ngspice when the solver is available
 
+### Physical Hardware Console
+
+- Read continuous FSR and accelerometer frames directly from a Teensy 4.1 serial port
+- Keep backend acquisition independent from the fixed-rate browser visualization
+- Tare both FSR layers and display flexible 2D heatmaps, smooth 3D surfaces, and a combined interactive view
+- Report measured hardware FPS, payload size, and Teensy-to-PC serial throughput
+- Compile and upload full-frame, delta, triggered, or FSR-only firmware from one dedicated page
+- Keep physical COM-port behavior separate from the software-only FSR and ACC demos
+
 ## Demo Videos
 
-The repository includes two embedded demo previews to document the current simulator behavior. The original MP4 recordings are kept in `docs/demo/`, while the GIF previews below are used because GitHub README pages do not render repository-hosted MP4 files as inline players.
+The repository includes embedded demo previews to document the current simulator behavior. The original MP4 recordings are kept in `docs/demo/`, while the GIF previews below are used because GitHub README pages do not render repository-hosted MP4 files as inline players.
 
 ### Programmable FSR Readout Demo
 
@@ -86,11 +95,21 @@ Demonstrates the modular e-skin dashboard, including honeycomb-style module plac
 
 <img src="docs/demo/demo1-preview.gif" alt="Module network dashboard demo" width="100%">
 
+### Physical Hardware Console
+
+Demonstrates the current Teensy readout workflow, including two live FSR layers, hardware-rate metrics, serial throughput, tare, and firmware upload controls.
+
+<img src="docs/demo/demo3-preview.gif" alt="Physical e-skin hardware console demo" width="100%">
+
 These videos show the current state of the prototype. The simulator remains in progress, and future videos will be updated as new hardware models, external MCU workflows, scan strategies, and algorithm experiments are added.
 
 ## Running
 
-This project uses only the Python standard library for the backend and plain HTML/CSS/JavaScript for the frontend.
+The simulation APIs use the Python standard library. Install `pyserial` for the physical hardware console:
+
+```powershell
+python -m pip install -r requirements.txt
+```
 
 ```powershell
 python server.py
@@ -106,7 +125,7 @@ Use the HTTP address above rather than opening `index.html` directly, because th
 
 ## ngspice Electrical Backend
 
-The project includes an optional ngspice adapter for circuit-level simulation. The current deployment uses the official Windows 64-bit ngspice console executable and keeps the downloaded runtime under the ignored local `tools/ngspice/` directory.
+The project includes an optional ngspice adapter for circuit-level simulation. A local Windows runtime can be placed under the ignored `tools/ngspice/` directory, or supplied through the environment or `PATH`.
 
 The backend discovers ngspice in this order:
 
@@ -120,7 +139,7 @@ The health endpoint runs a `3.3 V` FSR voltage-divider smoke test through ngspic
 http://127.0.0.1:8000/api/ngspice-health
 ```
 
-The interactive FSR demo now uses ngspice for the selected-row electrical network. For each scanned row, Python computes the current FSR resistance values, ngspice solves the row source, MUX on-resistance, 16 FSRs, and 16 load resistors, then the Python MAX11632 model converts those node voltages into FIFO and MISO words.
+The manual ADC workflow can use ngspice for the selected-row electrical network. The continuous FSR animation uses the faster Python divider model. In both cases, the MAX11632 model converts column-node voltages into FIFO and MISO words.
 
 The accelerometer demo uses ngspice for the LIS3DH active-low chip-select electrical layer. The address decoder network is solved as 16 nCS lines with pull-ups, LIS3DH input leakage, and one selected decoder sink. Python then continues with the digital LIS3DH register/SPI behavior. The dashboard-level module heatmap still uses the fast Python pressure model.
 
@@ -145,53 +164,41 @@ The dashboard includes a load-on-demand Fusion OBJ preview for the module model.
    - `Delete` / `Backspace`
 8. Click `FSR Demo` to inspect the hardware readout path for one 16 x 16 FSR layer.
 9. Click `Accel Demo` to inspect the LIS3DH accelerometer-array readout path.
+10. Open `Hardware Live` for COM-port acquisition, tare, hardware metrics, and firmware upload.
 
 ## Project Structure
 
 ```text
 software-simulation/
-  server.py                    # root launcher; keeps `python server.py` working
+  server.py                    # stable root launcher
+  requirements.txt            # real-hardware serial dependency
   backend/
-    README.md                  # backend package map and API summary
-    server.py                  # Python HTTP server and simulation API
-    accel/
-      README.md                # LIS3DH hardware model documentation
-      hardware.py              # virtual LIS3DH, CS MUX, ngspice nCS drive, and SPI primitives
-      sampler.py               # programmable LIS3DH scan controller
-    electrical/
-      README.md                # shared electrical solver documentation
-      ngspice_backend.py       # optional circuit-level ngspice adapter and health check
-    fsr/
-      README.md                # FSR hardware model documentation
-      hardware.py              # virtual DMUX, ADC, resistor, FSR, and FSR array primitives
-      sampler.py               # programmable FSR scan controller
+    server.py                  # HTTP routes, serial sessions, and firmware upload
+    dashboard.py               # module pressure and throughput calculations
+    fsr/                       # DMUX, FSR, MAX11632, SPI, and scan program
+    accel/                     # LIS3DH, CS decoder, SPI, and scan program
+    electrical/                # optional ngspice adapter
   circuits/
-    ngspice/
-      accel-cs-mux.cir         # LIS3DH active-low nCS pull-up/decoder-sink reference circuit
-      fsr-divider.cir          # standalone FSR voltage-divider smoke-test circuit
-      fsr-selected-row.cir     # selected-row FSR network with MUX on-resistance and 16 load dividers
+    ngspice/                   # standalone reference SPICE decks
   frontend/
-    assets/
-      models/                 # Fusion OBJ/MTL module preview assets
-    accelerometer-demo.html    # LIS3DH accelerometer-array readout demo
     index.html                 # module-network dashboard
-    fsr-demo.html              # FSR readout circuit demo
-    styles.css                 # shared UI styling
-    vendor/
-      three/                   # vendored Three.js modules used by the OBJ viewer
+    fsr-demo.html              # virtual FSR readout demo
+    accelerometer-demo.html    # virtual LIS3DH readout demo
+    hardware-live.html         # physical Teensy console and uploader
+    css/app.css                # shared responsive styles
     js/
-      app.js                   # dashboard interaction, rendering, and API calls
-      accelerometer-demo.js    # LIS3DH visualization and MISO-driven heatmap logic
-      fsr-demo.js              # FSR visualization and MISO-driven heatmap logic
-      module-3d-viewer.js      # dashboard Fusion OBJ preview viewer
+      pages/                   # one controller per HTML page
+      components/              # optional reusable viewers
+    assets/models/             # Fusion OBJ/MTL module preview
+    vendor/three/              # vendored Three.js subset
   docs/
-    datasheets/                # component datasheets used by the virtual hardware models
-    demo/
-      demo1.mp4                # dashboard workflow demo
-      demo2.mp4                # programmable FSR readout demo
-    hardware/                  # module and patch renders used by this README
-    references/                # project reports and source PDFs
-  CHANGELOG.md                 # ordered record of pushed changes
+    PROJECT_STRUCTURE.md       # dependency and source-of-truth map
+    datasheets/                # component references
+    demo/                      # MP4 sources and GitHub GIF previews
+    hardware/                  # README hardware images
+    references/                # reports and publications
+  tools/acquisition/           # optional offline serial/MATLAB tools
+  CHANGELOG.md                 # ordered change record
 ```
 
-Local KiCad prototypes and downloaded helper tools can live beside the simulator under `prototype/` and `tools/`. They are intentionally excluded from software pushes so the repository stays focused on the runnable simulation platform.
+See [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md) for the page-to-API map, firmware source paths, generated directories, and source-of-truth rules. Local KiCad prototypes and downloaded binary utilities remain excluded; the small `tools/acquisition/` source package is tracked intentionally.

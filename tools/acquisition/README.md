@@ -1,0 +1,68 @@
+# Hardware Acquisition Tools
+
+This directory contains optional offline tools for recording and plotting data
+from the physical Teensy e-skin hardware. It is independent from the web
+simulator runtime.
+
+## Python environment
+
+The existing local environment is `.venv-record/`. To recreate it:
+
+```powershell
+python -m venv .venv-record
+.\.venv-record\Scripts\python.exe -m pip install -r tools\acquisition\requirements.txt
+```
+
+## Record serial data
+
+Run commands from the repository root:
+
+```powershell
+# FSR + ACC combined firmware
+.\.venv-record\Scripts\python.exe tools\acquisition\record.py COM5 16 data_combined.mat --protocol eskin-combined
+
+# FSR-only serial firmware
+.\.venv-record\Scripts\python.exe tools\acquisition\record.py COM5 16 data_fsr.mat --protocol fsr-serial
+```
+
+Supported protocols:
+
+| Protocol | Expected firmware payload |
+|---|---|
+| `fsr-serial` | One 16 x 16 FSR layer. |
+| `eskin-fsr` | Cached FSR frame from the combined firmware. |
+| `eskin-combined` | 16 accelerometers plus two 16 x 16 FSR layers. |
+
+The output is a MATLAB `.mat` file containing FSR frames, optional ACC frames,
+timestamps, and the selected protocol. Generated `.mat` files are ignored by
+Git.
+
+## MATLAB references
+
+The `matlab/` directory contains the retained MATLAB acquisition and plotting
+scripts:
+
+```text
+matlab/serialComEskinCombined.m
+matlab/serialComFSR.m
+matlab/tcpComFSR.m
+```
+
+## Firmware source of truth
+
+Firmware is not duplicated in this directory. Both the web uploader and these
+acquisition tools use firmware maintained beside this repository at:
+
+```text
+../hardware/e-skin_original/src/
+```
+
+The web uploader specifically reads:
+
+```text
+../hardware/e-skin_original/src/Eskin/Eskin.ino
+../hardware/e-skin_original/src/fsr_adc_plexed_serial/fsr_adc_plexed_serial.ino
+```
+
+Only one application can own `COM5` at a time. Close the web Hardware Live
+session, Arduino Serial Monitor, or MATLAB before starting another recorder.

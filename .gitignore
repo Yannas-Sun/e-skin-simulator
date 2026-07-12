@@ -1,5 +1,3 @@
-__pycache__/
-*.py[cod]
 *.log
 .venv-record/
 .DS_Store
@@ -7,9 +5,19 @@ Thumbs.db
 
 # Local hardware workspaces and helper tools are maintained outside software pushes.
 prototype/
-tools/
+tools/*
+!tools/acquisition/
+!tools/acquisition/**
 screenshot/
+
+# Keep generated Python state ignored after the acquisition source whitelist.
+__pycache__/
+*.py[cod]
+
+# Acquisition output is local experiment data, not source code.
+*.mat
 
 # Local inspection and generated helper outputs.
 $out
 .codex_*
+.agents/

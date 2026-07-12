@@ -1,6 +1,0 @@
-{
-    "configuration": "teensy41",
-    "board": "teensy:avr",
-    "port": "/dev/ttyACM0",
-    "output": "./build/"
-}

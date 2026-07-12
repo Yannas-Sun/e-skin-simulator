@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-07-12 - Project Structure Cleanup
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Maintenance]** Preserved the complete pre-cleanup simulator state in Git before moving files.
+   - Created and pushed `codex/project-structure-cleanup`.
+   - Commit `98ecd0d` is the runnable baseline before directory cleanup.
+
+2. **[Structure]** Grouped frontend resources by responsibility without changing page URLs.
+   - Page controllers now live under `frontend/js/pages/`.
+   - Reusable 3D viewer code now lives under `frontend/js/components/`.
+   - Shared styles moved to `frontend/css/app.css`.
+   - Dashboard pressure and throughput calculations moved from `backend/server.py` to `backend/dashboard.py`.
+   - Existing `index.html`, `fsr-demo.html`, `accelerometer-demo.html`, and `hardware-live.html` URLs remain unchanged.
+
+3. **[Logic]** Separated simulation and physical-hardware responsibilities.
+   - Removed the duplicate firmware uploader from the dashboard; all upload controls remain on Hardware Live.
+   - Removed obsolete COM-port polling, tare, and hardware-canvas code from the FSR simulation controller.
+   - Existing API paths, serial protocols, and physical firmware source paths remain unchanged.
+
+4. **[Tools]** Consolidated optional physical acquisition utilities under `tools/acquisition/`.
+   - Retained the enhanced Python recorder and unique MATLAB scripts.
+   - Removed copied firmware trees that were byte-for-byte duplicates of `../hardware/e-skin_original/src/`.
+   - Removed generated sample data, MATLAB autosave files, and duplicate original recorder files from the active tree.
+   - Repaired the ignored local `.venv-record` launcher for the current Python 3.12 runtime and verified its acquisition dependencies.
+
+5. **[Documentation]** Added explicit structure and source-of-truth documentation.
+   - Added `docs/PROJECT_STRUCTURE.md`, `frontend/README.md`, and a rewritten acquisition README.
+   - Added a root `requirements.txt` for the optional `pyserial` hardware dependency.
+   - Updated README paths, the physical hardware feature description, and the third demo preview.
+
+6. **[Assets]** Normalized the third demo filenames.
+   - `DEMO 3.gif` became `demo3-preview.gif`.
+   - `demo 3.mp4` became `demo3.mp4`.
+
 ## 2026-06-28 - Split Real Hardware Console from FSR Simulation
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

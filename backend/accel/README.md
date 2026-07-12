@@ -230,7 +230,6 @@ The frontend heatmap is updated from decoded MISO data. Object placement only ch
 
 `backend/accel/hardware.py` does not implement the high-level scan loop. That lives in `backend/accel/sampler.py`.
 
-It does not render the frontend. It returns structured state that `frontend/js/accelerometer-demo.js` draws.
+It does not render the frontend. It returns structured state that `frontend/js/pages/accelerometer-demo.js` draws.
 
 It does not yet model LIS3DH internal MEMS capacitance, package resonance, PCB parasitics, SPI line capacitance, or interrupt timing. The new ngspice hook currently covers the CS decoder electrical layer and can be expanded later to include line capacitance, pull-up choices, decoder output resistance, and signal-integrity approximations.
-
