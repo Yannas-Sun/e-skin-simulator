@@ -180,6 +180,8 @@ software-simulation/
     electrical/                # optional ngspice adapter
   circuits/
     ngspice/                   # standalone reference SPICE decks
+  firmware/
+    teensy41/                  # tracked FSR-only and combined Teensy sketches
   frontend/
     index.html                 # module-network dashboard
     fsr-demo.html              # virtual FSR readout demo
@@ -197,8 +199,10 @@ software-simulation/
     demo/                      # MP4 sources and GitHub GIF previews
     hardware/                  # README hardware images
     references/                # reports and publications
-  tools/acquisition/           # optional offline serial/MATLAB tools
+  tools/
+    acquisition/               # optional offline serial/MATLAB tools
+    arduino-cli/               # local CLI slot; executable remains ignored
   CHANGELOG.md                 # ordered change record
 ```
 
-See [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md) for the page-to-API map, firmware source paths, generated directories, and source-of-truth rules. Local KiCad prototypes and downloaded binary utilities remain excluded; the small `tools/acquisition/` source package is tracked intentionally.
+See [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md) for the page-to-API map, firmware source paths, generated directories, and source-of-truth rules. Uploadable Teensy source is tracked under `firmware/`; local KiCad prototypes and downloaded binary utilities remain excluded.

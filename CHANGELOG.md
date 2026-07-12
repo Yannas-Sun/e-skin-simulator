@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-07-13 - Repository-Local Firmware Upload
+
+Changes are ordered from most important to least important. Each change is labeled with a type.
+
+1. **[Structure]** Moved the firmware source of truth into this repository.
+   - Added the compile-required Teensy 4.1 sources under `firmware/teensy41/Eskin/` and `firmware/teensy41/fsr_adc_plexed_serial/`.
+   - Removed the uploader's dependency on `../hardware/e-skin_original/src/`.
+
+2. **[Logic]** Made firmware preparation local and self-cleaning.
+   - Temporary selectable-mode sketches now use the ignored `firmware/.build/` directory.
+   - Cleanup removes timestamped builds and their empty parent directories after compile or upload.
+
+3. **[Tooling]** Added a repository-local Arduino CLI lookup path.
+   - The backend now prefers `tools/arduino-cli/arduino-cli.exe` and falls back to `arduino-cli` on `PATH`.
+   - Copied the current Arduino CLI executable into the ignored local tool slot; the executable and installed Teensy compiler packages are not committed.
+   - Retained the Arduino CLI license and setup notes in the tracked repository.
+
+4. **[Documentation]** Updated the root README, backend guide, acquisition guide, and project structure map for the new firmware and tool paths.
+
 ## 2026-07-12 - Project Structure Cleanup
 
 Changes are ordered from most important to least important. Each change is labeled with a type.

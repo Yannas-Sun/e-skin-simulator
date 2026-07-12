@@ -29,29 +29,29 @@ from .fsr.sampler import run_adc_mosi_program, run_fsr_readout
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_ROOT = ROOT / "frontend"
 MODEL_ROOT = (FRONTEND_ROOT / "assets" / "models").resolve()
-HARDWARE_ROOT = ROOT.parent / "hardware" / "e-skin_original"
+FIRMWARE_ROOT = ROOT / "firmware" / "teensy41"
 FIRMWARE_TARGETS = {
     "fsr": {
         "label": "FSR-only",
-        "sketch": HARDWARE_ROOT / "src" / "fsr_adc_plexed_serial" / "fsr_adc_plexed_serial.ino",
+        "sketch": FIRMWARE_ROOT / "fsr_adc_plexed_serial" / "fsr_adc_plexed_serial.ino",
     },
     "combined": {
         "label": "FSR + ACC combined",
-        "sketch": HARDWARE_ROOT / "src" / "Eskin" / "Eskin.ino",
+        "sketch": FIRMWARE_ROOT / "Eskin" / "Eskin.ino",
     },
     "combined-delta": {
         "label": "FSR + ACC delta stream",
-        "sketch": HARDWARE_ROOT / "src" / "Eskin" / "Eskin.ino",
+        "sketch": FIRMWARE_ROOT / "Eskin" / "Eskin.ino",
     },
     "combined-triggered": {
         "label": "FSR triggered low/high scan",
-        "sketch": HARDWARE_ROOT / "src" / "Eskin" / "Eskin.ino",
+        "sketch": FIRMWARE_ROOT / "Eskin" / "Eskin.ino",
     },
 }
 DEFAULT_TEENSY_FQBN = "teensy:avr:teensy41"
-LOCAL_ARDUINO_CLI = Path("D:/study/Programing/arduino/arduino-cli.exe")
+LOCAL_ARDUINO_CLI = ROOT / "tools" / "arduino-cli" / "arduino-cli.exe"
 RUNTIME_ROOT = Path(tempfile.gettempdir()) / "e-skin-simulator"
-FIRMWARE_BUILD_ROOT = RUNTIME_ROOT / "firmware-build"
+FIRMWARE_BUILD_ROOT = ROOT / "firmware" / ".build"
 SERIAL_METER_ROOT = RUNTIME_ROOT / "serial-meter"
 FSR_HARDWARE_PROTOCOLS = {"fsr-serial", "eskin-fsr", "eskin-combined", "eskin-combined-stream", "eskin-combined-delta"}
 
@@ -1146,7 +1146,18 @@ def cleanup_prepared_firmware(sketch: Path) -> bool:
         except OSError:
             pass
         shutil.rmtree(target_dir, ignore_errors=True)
-        return not target_dir.exists()
+        removed = not target_dir.exists()
+        if removed:
+            for empty_parent in (target_dir.parent, build_root):
+                try:
+                    os.chmod(empty_parent, 0o700)
+                except OSError:
+                    pass
+                try:
+                    empty_parent.rmdir()
+                except OSError:
+                    pass
+        return removed
     except (OSError, ValueError):
         return False
 
@@ -1185,9 +1196,7 @@ def flash_firmware(
         response["temporaryBuildCleaned"] = cleanup_prepared_firmware(sketch)
         return response
 
-    arduino_cli = shutil.which("arduino-cli")
-    if not arduino_cli and LOCAL_ARDUINO_CLI.exists():
-        arduino_cli = str(LOCAL_ARDUINO_CLI)
+    arduino_cli = str(LOCAL_ARDUINO_CLI) if LOCAL_ARDUINO_CLI.exists() else shutil.which("arduino-cli")
     if not arduino_cli:
         response = {
             "ok": False,
@@ -1197,7 +1206,7 @@ def flash_firmware(
             "fqbn": fqbn,
             "sketch": str(sketch),
             **sketch_metadata,
-            "error": "arduino-cli not found. Install Arduino CLI and Teensy board support first.",
+            "error": f"arduino-cli not found. Place it at {LOCAL_ARDUINO_CLI} or install it on PATH.",
             "hint": f"Expected CLI commands: arduino-cli compile --fqbn {fqbn} {sketch}; arduino-cli upload -p {port} --fqbn {fqbn} {sketch}",
         }
         response["temporaryBuildCleaned"] = cleanup_prepared_firmware(sketch)

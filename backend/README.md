@@ -34,10 +34,10 @@ The public API paths are still defined in `backend/server.py`:
 | `POST /api/flash-firmware` | Prepare a temporary sketch, compile it, and upload it with Arduino CLI. |
 | `GET /api/ngspice-health` | ngspice discovery and smoke tests. |
 
-The physical firmware source is intentionally outside this package at
-`../hardware/e-skin_original/src/`. `backend/server.py` copies it into the
-system temporary directory before applying selectable stream
-logic; it never edits the source sketch in place.
+The uploadable firmware source is maintained inside this repository under
+`firmware/teensy41/`. `backend/server.py` copies it into the ignored
+`firmware/.build/` directory before applying selectable stream logic; it never
+edits the source sketch in place.
 
 The root `server.py` file remains as a launcher so the project can still be started with:
 

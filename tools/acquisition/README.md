@@ -51,18 +51,12 @@ matlab/tcpComFSR.m
 
 ## Firmware source of truth
 
-Firmware is not duplicated in this directory. Both the web uploader and these
-acquisition tools use firmware maintained beside this repository at:
+Firmware is maintained in the same repository as the simulator. The web
+uploader reads:
 
 ```text
-../hardware/e-skin_original/src/
-```
-
-The web uploader specifically reads:
-
-```text
-../hardware/e-skin_original/src/Eskin/Eskin.ino
-../hardware/e-skin_original/src/fsr_adc_plexed_serial/fsr_adc_plexed_serial.ino
+firmware/teensy41/Eskin/Eskin.ino
+firmware/teensy41/fsr_adc_plexed_serial/fsr_adc_plexed_serial.ino
 ```
 
 Only one application can own `COM5` at a time. Close the web Hardware Live

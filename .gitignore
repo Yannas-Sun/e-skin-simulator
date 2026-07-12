@@ -8,7 +8,14 @@ tools/*
 !tools/acquisition/
 !tools/acquisition/**
 tools/acquisition/.venv/
+!tools/arduino-cli/
+tools/arduino-cli/*
+!tools/arduino-cli/README.md
+!tools/arduino-cli/LICENSE.txt
 screenshot/
+
+# Firmware sources are tracked; only generated compiler copies are local.
+firmware/.build/
 
 # Keep generated Python state ignored after the acquisition source whitelist.
 __pycache__/

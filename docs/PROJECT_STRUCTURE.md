@@ -55,27 +55,27 @@ application.
 
 ## Firmware source and upload flow
 
-Firmware has one source of truth outside this software repository:
+Firmware has one source of truth inside this repository:
 
 ```text
-../hardware/e-skin_original/src/
+firmware/teensy41/
 ```
 
 Upload targets resolve to:
 
 ```text
 FSR only
-  -> ../hardware/e-skin_original/src/fsr_adc_plexed_serial/
+  -> firmware/teensy41/fsr_adc_plexed_serial/
 
 Combined, delta, and triggered scanning
-  -> ../hardware/e-skin_original/src/Eskin/
+  -> firmware/teensy41/Eskin/
 ```
 
 The uploader copies the selected sketch directory into
-`%TEMP%/e-skin-simulator/firmware-build/`, modifies only that temporary copy,
-invokes
-`D:/study/Programing/arduino/arduino-cli.exe`, and then removes the temporary
-build. The original hardware source is never rewritten by the web uploader.
+`firmware/.build/`, modifies only that temporary copy, invokes the local
+`tools/arduino-cli/arduino-cli.exe` or an `arduino-cli` available on `PATH`, and
+then removes the temporary build. The tracked base sketch is never rewritten by
+the web uploader.
 
 ## Optional acquisition tools
 
@@ -91,6 +91,7 @@ It reads the same physical serial protocols but is not imported by the server.
 - `docs/demo/`: MP4 sources and GIF previews for GitHub.
 - `circuits/ngspice/`: standalone reference SPICE decks.
 - `frontend/assets/models/`: optional large module model used by the 3D viewer.
+- `firmware/`: tracked Teensy 4.1 source sketches used by the uploader.
 
 ## Generated local state
 
@@ -98,7 +99,9 @@ These paths are reproducible and must not be committed:
 
 ```text
 tools/acquisition/.venv/  Optional acquisition environment
-%TEMP%/e-skin-simulator/  Firmware copies and one-second serial byte meter
+tools/arduino-cli/*.exe   Optional local third-party Arduino CLI binary
+firmware/.build/          Temporary prepared sketches and compiler output
+%TEMP%/e-skin-simulator/  One-second serial byte meter
 __pycache__/ and *.pyc    Python bytecode
 *.mat                     Recorded experiment output
 .agents/ and .codex/      Local Codex session metadata, not application source
@@ -106,7 +109,7 @@ __pycache__/ and *.pyc    Python bytecode
 
 ## Source-of-truth rules
 
-1. Edit physical firmware only under `../hardware/e-skin_original/src/`.
+1. Edit uploadable physical firmware only under `firmware/teensy41/`.
 2. Edit virtual hardware under `backend/fsr/` or `backend/accel/`.
 3. Edit page behavior under `frontend/js/pages/`.
 4. Keep real COM-port behavior in `hardware-live.js`, not simulation pages.
