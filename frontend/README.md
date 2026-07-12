@@ -9,6 +9,7 @@ frontend/
   fsr-demo.html                 Programmable FSR simulation
   accelerometer-demo.html       Programmable LIS3DH simulation
   hardware-live.html            Physical Teensy serial console and uploader
+  styles.css                    Compatibility import for older cached pages
   css/
     app.css                     Shared responsive styles
   js/

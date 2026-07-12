@@ -19,6 +19,8 @@ Changes are ordered from most important to least important. Each change is label
 
 4. **[Documentation]** Updated the root README, backend guide, acquisition guide, and project structure map for the new firmware and tool paths.
 
+5. **[Compatibility]** Restored `frontend/styles.css` as a small import shim for browser tabs cached before the stylesheet moved to `frontend/css/app.css`.
+
 ## 2026-07-12 - Project Structure Cleanup
 
 Changes are ordered from most important to least important. Each change is labeled with a type.
