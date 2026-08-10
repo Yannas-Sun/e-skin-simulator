@@ -9,6 +9,10 @@ prototype/
 tools/
 screenshot/
 
+# The embedded workspace owns its own command launchers under firmware/tools.
+!firmware/tools/
+!firmware/tools/**
+
 # Local inspection and generated helper outputs.
 $out
 .codex_*

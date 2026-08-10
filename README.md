@@ -26,6 +26,15 @@ The same geometry supports patch-level assembly. The render below shows a five-m
 
 The complete PCB layouts, schematics, layer renders, and hardware development notes are maintained on the [`codex/hardware-prototype` branch](https://github.com/Yannas-Sun/e-skin-simulator/tree/codex/hardware-prototype).
 
+## Embedded Firmware
+
+The `firmware/` directory contains the current STM32G474 and Teensy 4.1 source,
+Windows build/flash launchers, combined and standalone PC GUIs, and hardware
+isolation tests for the physical module. The implemented prototype acquires two
+16 x 16 FSR matrices and nine installed LIS2DH12 accelerometers. Start with
+[`firmware/README.md`](firmware/README.md) for the current hardware status and
+one-command programming workflow.
+
 ## Development Status
 
 This project is still under active development. The current repository captures the first programmable simulation workflow, hardware-readout demo, and visualization interface. New functions will continue to be added, including richer scan strategies, external MCU-in-the-loop testing, event-driven sensing experiments, encoder/VAE-style data compression, and more complete multi-patch communication models.
@@ -191,6 +200,7 @@ software-simulation/
       demo2.mp4                # programmable FSR readout demo
     hardware/                  # module and patch renders used by this README
     references/                # project reports and source PDFs
+  firmware/                    # STM32/Teensy firmware, tests, commands, and PC GUIs
   CHANGELOG.md                 # ordered record of pushed changes
 ```
 
