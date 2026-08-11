@@ -75,15 +75,23 @@ the `all` view automatically after upload.
 .\flash_combined.cmd
 ```
 
-Expected data source: FSR1 16x16 + FSR2 16x16 + ACC1..ACC9. The frame is
-1188 bytes with `ESK1` magic, sequence, timestamp, status flags, and CRC32.
-Combined mode always scans all nine ACCs; it has no single-ACC flag.
+Expected data source: FSR1 16x16 + FSR2 16x16 + ACC1..ACC9. The current
+protocol-v2 frame is 1188 bytes with `ESK1` magic, sequence, timestamp, status
+flags, and a CRC-present flag. Sequence multiples of 32 carry IEEE CRC32;
+other v2 frames carry a zero trailer. Combined mode always reads all nine ACC
+positions and has no single-ACC flag.
+
 The current combined Teensy bridge uses hardware Mode-0 SPI at `10 MHz`, with
-IRQ/CS/hold waits of `50/10/10 us` and a `700 frame/s` pacing target. STM32
-SPI1 ADC and SPI2 ACC are both `10 MHz`; FSR MUX settle remains `100 us`.
-One shared FSR MUX address is acquired per packet, giving a measured complete
-16-address refresh of `43.76 Hz`; ACC XYZ is refreshed at `100 Hz`. The STM32
-command builds `Release`, which is the configuration validated at 700 Hz.
+IRQ/CS/hold waits of `50/10/10 us` and a `700 frame/s` maximum pacing target.
+STM32 ADC SPI1 and ACC SPI2 are both `10 MHz`; FSR MUX settle is `100 us`.
+Every output cycle scans all 16 MUX addresses for both FSR arrays, overlaps the
+two ADC conversions, pipelines the next MUX settle with FIFO reads, and reads
+all ACC positions at a configured 1.344 kHz ODR. The measured complete-cycle
+rate is `238.475 Hz` for 30 seconds. The command builds `Release`.
+
+This is the active experiment. Commit `5468ec8` is the last stable 700.181
+packets/s rolling-acquisition release; its complete fresh FSR rate is only
+43.76 Hz. See `docs/updates/2026-08-11-full-scan-700hz/PROGRESS_UPDATE.md`.
 
 ### 2.2 Upload Teensy 4.1
 

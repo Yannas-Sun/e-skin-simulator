@@ -17,26 +17,30 @@ extern void Combined_ReinitializeHostSPI(void);
 #define MAX11633_SCAN_0_TO_15 0xF8U
 #define ADC_TIMEOUT_MS 5U
 #define FSR_MUX_SETTLE_US 100U
-#define FSR_ROWS_PER_OUTPUT_FRAME 1U
+#define FSR_ROWS_PER_OUTPUT_FRAME FSR_ROWS
 
 #define ACC_WHO_REG 0x0FU
 #define ACC_WHO_EXPECTED 0x33U
 #define ACC_CTRL1_REG 0x20U
 #define ACC_CTRL4_REG 0x23U
 #define ACC_OUT_X_L_REG 0x28U
-#define ACC_CTRL1_VALUE 0x57U
+#define ACC_CTRL1_VALUE 0x97U
 #define ACC_CTRL4_VALUE 0x88U
 #define ACC_READ 0x80U
 #define ACC_INCREMENT 0x40U
 #define ACC_TIMEOUT_MS 10U
-#define ACC_SAMPLE_INTERVAL_MS 10U
+#define ACC_SAMPLE_INTERVAL_MS 0U
 #define ACC_HEALTH_SLOT_MS 100U
 
 #define COMBINED_MAGIC_0 0x45U /* E */
 #define COMBINED_MAGIC_1 0x53U /* S */
 #define COMBINED_MAGIC_2 0x4BU /* K */
 #define COMBINED_MAGIC_3 0x31U /* 1 */
-#define COMBINED_VERSION 1U
+#define COMBINED_VERSION 2U
+#define COMBINED_FLAG_ACC_PRESENT 0x04U
+#define COMBINED_FLAG_ROLLING_FSR 0x08U
+#define COMBINED_FLAG_CRC_PRESENT 0x10U
+#define CRC_FRAME_INTERVAL 32U
 #define HEADER_BYTES 16U
 #define FSR_BYTES (FSR_ROWS * FSR_COLS * 2U)
 #define ACC_RECORD_BYTES 16U
@@ -94,6 +98,7 @@ static volatile uint32_t host_dma_timeout_count;
 static uint16_t profile_fsr_us;
 static uint16_t profile_acc_us;
 static uint16_t profile_pack_us;
+static uint16_t profile_crc_us;
 static uint16_t profile_dma_wait_us;
 static uint32_t crc32_table[256];
 
@@ -102,6 +107,13 @@ static void delay_us(uint32_t microseconds)
   const uint32_t cycles_per_us = SystemCoreClock / 1000000U;
   const uint32_t cycles = cycles_per_us * microseconds;
   const uint32_t started = DWT->CYCCNT;
+  while ((DWT->CYCCNT - started) < cycles) { __NOP(); }
+}
+
+static void delay_until_us(uint32_t started, uint32_t microseconds)
+{
+  const uint32_t cycles_per_us = SystemCoreClock / 1000000U;
+  const uint32_t cycles = cycles_per_us * microseconds;
   while ((DWT->CYCCNT - started) < cycles) { __NOP(); }
 }
 
@@ -187,20 +199,18 @@ static HAL_StatusTypeDef adc_init(uint16_t cs_pin)
   return status;
 }
 
-static HAL_StatusTypeDef adc_read16(uint16_t cs_pin, uint16_t eoc_pin,
-                                    uint16_t samples[FSR_COLS])
+static HAL_StatusTypeDef adc_start_scan(uint16_t cs_pin)
 {
   uint8_t command = MAX11633_SCAN_0_TO_15;
-  uint8_t rx[FSR_COLS * 2U] = {0U};
   HAL_GPIO_WritePin(GPIOB, cs_pin, GPIO_PIN_RESET);
   HAL_StatusTypeDef status =
       HAL_SPI_Transmit(&hspi1, &command, 1U, ADC_TIMEOUT_MS);
   HAL_GPIO_WritePin(GPIOB, cs_pin, GPIO_PIN_SET);
-  if (status != HAL_OK)
-  {
-    return status;
-  }
+  return status;
+}
 
+static HAL_StatusTypeDef adc_wait_eoc(uint16_t eoc_pin)
+{
   const uint32_t start = HAL_GetTick();
   while (HAL_GPIO_ReadPin(GPIOB, eoc_pin) == GPIO_PIN_SET)
   {
@@ -209,9 +219,16 @@ static HAL_StatusTypeDef adc_read16(uint16_t cs_pin, uint16_t eoc_pin,
       return HAL_TIMEOUT;
     }
   }
+  return HAL_OK;
+}
 
+static HAL_StatusTypeDef adc_read_results(uint16_t cs_pin,
+                                          uint16_t samples[FSR_COLS])
+{
+  uint8_t rx[FSR_COLS * 2U] = {0U};
   HAL_GPIO_WritePin(GPIOB, cs_pin, GPIO_PIN_RESET);
-  status = HAL_SPI_Receive(&hspi1, rx, sizeof(rx), ADC_TIMEOUT_MS);
+  HAL_StatusTypeDef status =
+      HAL_SPI_Receive(&hspi1, rx, sizeof(rx), ADC_TIMEOUT_MS);
   HAL_GPIO_WritePin(GPIOB, cs_pin, GPIO_PIN_SET);
   if (status != HAL_OK)
   {
@@ -231,6 +248,8 @@ static uint8_t scan_fsr_rows(uint8_t row_count)
   uint16_t values2[FSR_COLS];
   uint8_t fsr1_ok = 1U;
   uint8_t fsr2_ok = 1U;
+  uint8_t mux_already_settling = 0U;
+  uint32_t mux_settle_started = 0U;
   last_fsr_rows_updated = row_count;
 
   /*
@@ -242,23 +261,67 @@ static uint8_t scan_fsr_rows(uint8_t row_count)
   {
     const uint8_t mux_address = fsr_row_cursor;
     last_fsr_row = mux_address;
-    select_mux(mux_address);
-    HAL_GPIO_WritePin(GPIOA, MUX_EN1_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(GPIOB, MUX_EN2_Pin, GPIO_PIN_RESET);
-    delay_us(FSR_MUX_SETTLE_US);
+    if (mux_already_settling == 0U)
+    {
+      select_mux(mux_address);
+      HAL_GPIO_WritePin(GPIOA, MUX_EN1_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(GPIOB, MUX_EN2_Pin, GPIO_PIN_RESET);
+      mux_settle_started = DWT->CYCCNT;
+    }
+    delay_until_us(mux_settle_started, FSR_MUX_SETTLE_US);
 
     HAL_StatusTypeDef status1 = HAL_ERROR;
     HAL_StatusTypeDef status2 = HAL_ERROR;
+
+    /* The ADCs have separate CS/EOC pins. Start both conversions before
+     * waiting so their 16-channel conversion phases overlap. Commands and
+     * FIFO reads remain sequential because both DOUT pins share SPI1 MISO. */
     if (fsr1_ok != 0U)
     {
-      status1 = adc_read16(ADC_CS1_Pin, ADC_EOC1_Pin, values1);
+      status1 = adc_start_scan(ADC_CS1_Pin);
     }
     if (fsr2_ok != 0U)
     {
-      status2 = adc_read16(ADC_CS2_Pin, ADC_EOC2_Pin, values2);
+      status2 = adc_start_scan(ADC_CS2_Pin);
     }
+    if (status1 == HAL_OK)
+    {
+      status1 = adc_wait_eoc(ADC_EOC1_Pin);
+    }
+    if (status2 == HAL_OK)
+    {
+      status2 = adc_wait_eoc(ADC_EOC2_Pin);
+    }
+
+    /* Both conversions are now complete and their samples are held in the
+     * ADC FIFOs. Start settling the next external MUX address before reading
+     * those digital results, overlapping up to two 32-byte SPI1 reads with
+     * the next address's analogue settling time. */
     HAL_GPIO_WritePin(GPIOA, MUX_EN1_Pin, GPIO_PIN_SET);
     HAL_GPIO_WritePin(GPIOB, MUX_EN2_Pin, GPIO_PIN_SET);
+    if ((row + 1U) < row_count)
+    {
+      const uint8_t next_mux_address =
+          (uint8_t)((mux_address + 1U) % FSR_ROWS);
+      select_mux(next_mux_address);
+      HAL_GPIO_WritePin(GPIOA, MUX_EN1_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(GPIOB, MUX_EN2_Pin, GPIO_PIN_RESET);
+      mux_settle_started = DWT->CYCCNT;
+      mux_already_settling = 1U;
+    }
+    else
+    {
+      mux_already_settling = 0U;
+    }
+
+    if (status1 == HAL_OK)
+    {
+      status1 = adc_read_results(ADC_CS1_Pin, values1);
+    }
+    if (status2 == HAL_OK)
+    {
+      status2 = adc_read_results(ADC_CS2_Pin, values2);
+    }
 
     if (status1 != HAL_OK)
     {
@@ -285,9 +348,9 @@ static uint8_t scan_fsr_rows(uint8_t row_count)
     fsr_row_cursor = (uint8_t)((fsr_row_cursor + 1U) % FSR_ROWS);
   }
 
-  /* Keep the last valid rows when one rolling acquisition fails. Clearing a
-   * complete 16x16 matrix here would turn one transient row error into 16
-   * frames of artificial zero data. The status bits still expose the error. */
+  /* Keep the last valid rows when one acquisition fails. Clearing a complete
+   * matrix would replace useful retained data with artificial zeros; the
+   * per-frame FSR status bits still expose the failed scan. */
   return (uint8_t)((fsr1_ok != 0U ? 0x01U : 0U) |
                    (fsr2_ok != 0U ? 0x02U : 0U));
 }
@@ -461,6 +524,12 @@ static void scan_acc(void)
 
 static void pack_frame(uint8_t *target, uint8_t flags)
 {
+  const uint32_t pack_started = DWT->CYCCNT;
+  const uint32_t frame_sequence = sequence++;
+  const uint8_t crc_present =
+      ((frame_sequence % CRC_FRAME_INTERVAL) == 0U) ? 1U : 0U;
+  if (crc_present != 0U) { flags |= COMBINED_FLAG_CRC_PRESENT; }
+
   uint32_t offset = 0U;
   target[offset++] = COMBINED_MAGIC_0;
   target[offset++] = COMBINED_MAGIC_1;
@@ -469,15 +538,16 @@ static void pack_frame(uint8_t *target, uint8_t flags)
   target[offset++] = COMBINED_VERSION;
   target[offset++] = flags;
   put_u16(target, &offset, COMBINED_FRAME_BYTES);
-  put_u32(target, &offset, sequence++);
+  put_u32(target, &offset, frame_sequence);
   put_u32(target, &offset, HAL_GetTick());
 
-  for (uint8_t row = 0U; row < FSR_ROWS; ++row)
-    for (uint8_t col = 0U; col < FSR_COLS; ++col)
-      put_u16(target, &offset, fsr1[row][col]);
-  for (uint8_t row = 0U; row < FSR_ROWS; ++row)
-    for (uint8_t col = 0U; col < FSR_COLS; ++col)
-      put_u16(target, &offset, fsr2[row][col]);
+  /* STM32G4 is little-endian and the protocol stores FSR uint16 values in
+   * little-endian order. The matrices are contiguous, so two block copies
+   * preserve the wire format while avoiding 512 put_u16() function calls. */
+  memcpy(&target[offset], fsr1, FSR_BYTES);
+  offset += FSR_BYTES;
+  memcpy(&target[offset], fsr2, FSR_BYTES);
+  offset += FSR_BYTES;
 
   for (uint8_t i = 0U; i < ACC_COUNT; ++i)
   {
@@ -491,9 +561,8 @@ static void pack_frame(uint8_t *target, uint8_t flags)
     put_u16(target, &offset, acc[i].spi_error);
     target[offset++] = acc[i].idle_miso;
     target[offset++] = acc[i].command_rx;
-    /* The two formerly reserved bytes in ACC record 0 describe rolling FSR
-     * freshness without changing the 1188-byte protocol: last updated shared
-     * MUX address, then number of addresses updated for this packet. */
+    /* ACC record 0 describes FSR freshness: last MUX address and number of
+     * addresses freshly scanned for this frame (16 in full-scan mode). */
     if (i == 0U)
     {
       target[offset++] = last_fsr_row;
@@ -506,10 +575,15 @@ static void pack_frame(uint8_t *target, uint8_t flags)
       if (i == 2U) { profile = profile_acc_us; }
       if (i == 3U) { profile = profile_pack_us; }
       if (i == 4U) { profile = profile_dma_wait_us; }
+      if (i == 5U) { profile = profile_crc_us; }
       put_u16(target, &offset, profile);
     }
   }
-  const uint32_t crc = crc32_ieee(target, offset);
+  profile_pack_us = elapsed_us_saturated(pack_started);
+
+  const uint32_t crc_started = DWT->CYCCNT;
+  const uint32_t crc = (crc_present != 0U) ? crc32_ieee(target, offset) : 0U;
+  profile_crc_us = elapsed_us_saturated(crc_started);
   put_u32(target, &offset, crc);
 }
 
@@ -652,19 +726,16 @@ void CombinedAcquisition_RunOnce(void)
    * acquires/packs only into host_fill_index. */
   if (host_pipeline_primed == 0U)
   {
-    /* Fill every row once at startup. Steady state then updates one shared MUX
-     * address per output frame, allowing a 700 Hz packet stream while each
-     * complete 16-row matrix refreshes at 700/16 = 43.75 Hz. */
+    /* Fill every row before publishing the first full-scan frame. Steady state
+     * also scans all 16 shared MUX addresses for every output frame. */
     uint32_t profile_started = DWT->CYCCNT;
     uint8_t flags = scan_fsr_rows(FSR_ROWS);
     profile_fsr_us = elapsed_us_saturated(profile_started);
     profile_started = DWT->CYCCNT;
     scan_acc();
     profile_acc_us = elapsed_us_saturated(profile_started);
-    flags |= 0x0CU; /* ACC present + rolling-scan protocol flag. */
-    profile_started = DWT->CYCCNT;
+    flags |= COMBINED_FLAG_ACC_PRESENT;
     pack_frame(host_tx[host_send_index], flags);
-    profile_pack_us = elapsed_us_saturated(profile_started);
     host_pipeline_primed = 1U;
   }
 
@@ -686,10 +757,12 @@ void CombinedAcquisition_RunOnce(void)
   profile_started = DWT->CYCCNT;
   scan_acc();
   profile_acc_us = elapsed_us_saturated(profile_started);
-  flags |= 0x0CU;
-  profile_started = DWT->CYCCNT;
+  flags |= COMBINED_FLAG_ACC_PRESENT;
+  if (FSR_ROWS_PER_OUTPUT_FRAME < FSR_ROWS)
+  {
+    flags |= COMBINED_FLAG_ROLLING_FSR;
+  }
   pack_frame(host_tx[host_fill_index], flags);
-  profile_pack_us = elapsed_us_saturated(profile_started);
 
   profile_started = DWT->CYCCNT;
   const HAL_StatusTypeDef status = wait_frame_dma();

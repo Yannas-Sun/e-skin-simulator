@@ -24,7 +24,11 @@ import numpy as np
 import serial
 
 MAGIC = b"ESK1"
-VERSION = 1
+LEGACY_VERSION = 1
+VERSION = 2
+SUPPORTED_VERSIONS = (LEGACY_VERSION, VERSION)
+CRC_PRESENT_FLAG = 0x10
+CRC_FRAME_INTERVAL = 32
 FRAME_BYTES = 1188
 HEADER_BYTES = 16
 FSR_WORDS = 256
@@ -70,23 +74,32 @@ class CombinedFrame:
     acc: tuple[AccSample, ...]
     updated_mux_address: int = 0xFF
     mux_addresses_updated: int = 16
-    profile_us: tuple[int, int, int, int] = (0, 0, 0, 0)
+    profile_us: tuple[int, int, int, int, int] = (0, 0, 0, 0, 0)
+    version: int = VERSION
+    crc_checked: bool = True
 
 
 def parse_frame(data: bytes) -> CombinedFrame:
     if len(data) != FRAME_BYTES:
         raise ValueError(f"frame length {len(data)} != {FRAME_BYTES}")
-    if data[:4] != MAGIC or data[4] != VERSION:
+    if data[:4] != MAGIC or data[4] not in SUPPORTED_VERSIONS:
         raise ValueError("bad magic or protocol version")
     declared = struct.unpack_from("<H", data, 6)[0]
     if declared != FRAME_BYTES:
         raise ValueError(f"declared frame length {declared} is invalid")
-    expected_crc = struct.unpack_from("<I", data, FRAME_BYTES - 4)[0]
-    actual_crc = zlib.crc32(data[:-4]) & 0xFFFFFFFF
-    if actual_crc != expected_crc:
-        raise ValueError("CRC32 mismatch")
     flags = data[5]
     sequence, stm32_ms = struct.unpack_from("<II", data, 8)
+    version = data[4]
+    crc_checked = version == LEGACY_VERSION or bool(flags & CRC_PRESENT_FLAG)
+    if version == VERSION and crc_checked != (sequence % CRC_FRAME_INTERVAL == 0):
+        raise ValueError("CRC flag does not match the protocol-v2 sampling cadence")
+    expected_crc = struct.unpack_from("<I", data, FRAME_BYTES - 4)[0]
+    if crc_checked:
+        actual_crc = zlib.crc32(data[:-4]) & 0xFFFFFFFF
+        if actual_crc != expected_crc:
+            raise ValueError("CRC32 mismatch")
+    elif expected_crc != 0:
+        raise ValueError("protocol-v2 frame without CRC flag has a nonzero trailer")
     offset = HEADER_BYTES
     fsr1 = np.frombuffer(data, dtype="<u2", count=FSR_WORDS, offset=offset).copy()
     offset += FSR_WORDS * 2
@@ -99,10 +112,11 @@ def parse_frame(data: bytes) -> CombinedFrame:
         samples.append(AccSample(*values))
         reserved.append((data[offset + 14], data[offset + 15]))
         offset += ACC_RECORD_BYTES
-    profiles = tuple((low | (high << 8)) for low, high in reserved[1:5])
+    profiles = tuple((low | (high << 8)) for low, high in reserved[1:6])
     return CombinedFrame(flags, sequence, stm32_ms, fsr1.reshape(ROWS, COLS),
                          fsr2.reshape(ROWS, COLS), tuple(samples),
-                         reserved[0][0], reserved[0][1], profiles)
+                         reserved[0][0], reserved[0][1], profiles,
+                         version, crc_checked)
 
 
 def read_exact(port: serial.Serial, count: int) -> bytes:
@@ -164,7 +178,8 @@ def demo_worker(target: queue.Queue[CombinedFrame], stop: threading.Event) -> No
         acc = tuple(AccSample(0x33, 0, int(300*np.sin(phase+i)),
                               int(300*np.cos(phase+i)), 980,
                               0x57, 0x88, 0, 1, 0xFF) for i in range(ACC_COUNT))
-        put_latest(target, CombinedFrame(7, sequence, sequence * 100,
+        put_latest(target, CombinedFrame(7 | CRC_PRESENT_FLAG,
+                                         sequence, sequence * 100,
                                          a.astype(np.uint16),
                                          b.astype(np.uint16), acc))
         sequence += 1
@@ -384,7 +399,8 @@ class CombinedGui:
             f"{self.mode} | frame {frame.sequence} | source {self.source_fps:.1f} fps | "
             f"display {self.render_fps:.1f} fps | FSR flags {frame.flags & 3:02b} | "
             f"ACC {valid_count}/9 | MUX {frame.updated_mux_address} "
-            f"(+{frame.mux_addresses_updated}) | CRC OK")
+            f"(+{frame.mux_addresses_updated}) | "
+            f"{'CRC OK' if frame.crc_checked else 'CRC NOT PRESENT / UNVERIFIED'}")
 
     def _update(self, _index: int) -> None:
         newest = None
@@ -421,8 +437,8 @@ def self_test() -> None:
     data = bytearray(FRAME_BYTES)
     data[:4] = MAGIC
     data[4] = VERSION
-    data[5] = 7
-    struct.pack_into("<HII", data, 6, FRAME_BYTES, 123, 456)
+    data[5] = 7 | CRC_PRESENT_FLAG
+    struct.pack_into("<HII", data, 6, FRAME_BYTES, 128, 456)
     offset = HEADER_BYTES
     for value in range(512):
         struct.pack_into("<H", data, offset, value)
@@ -430,7 +446,7 @@ def self_test() -> None:
     for index in range(ACC_COUNT):
         reserved_low = 5 if index == 0 else 0
         reserved_high = 1 if index == 0 else 0
-        if 1 <= index <= 4:
+        if 1 <= index <= 5:
             reserved_value = 100 + index
             reserved_low = reserved_value & 0xFF
             reserved_high = reserved_value >> 8
@@ -441,10 +457,11 @@ def self_test() -> None:
         offset += ACC_RECORD_BYTES
     struct.pack_into("<I", data, FRAME_BYTES - 4, zlib.crc32(data[:-4]))
     frame = parse_frame(bytes(data))
-    assert frame.sequence == 123 and frame.fsr1[0, 0] == 0
+    assert frame.sequence == 128 and frame.fsr1[0, 0] == 0
     assert frame.fsr2[-1, -1] == 511 and frame.acc[8].y == -8
     assert frame.updated_mux_address == 5 and frame.mux_addresses_updated == 1
-    assert frame.profile_us == (101, 102, 103, 104)
+    assert frame.profile_us == (101, 102, 103, 104, 105)
+    assert frame.version == VERSION and frame.crc_checked
     test = np.arange(256).reshape(16, 16)
     assert oriented_fsr(test)[0, 0] == test[15, 0]
     assert oriented_fsr(test)[15, 15] == test[0, 15]
@@ -456,6 +473,26 @@ def self_test() -> None:
         pass
     else:
         raise AssertionError("CRC test failed")
+    unchecked = bytearray(data)
+    unchecked[5] &= ~CRC_PRESENT_FLAG
+    struct.pack_into("<I", unchecked, 8, 129)
+    struct.pack_into("<I", unchecked, FRAME_BYTES - 4, 0)
+    unchecked_frame = parse_frame(bytes(unchecked))
+    assert unchecked_frame.version == VERSION and not unchecked_frame.crc_checked
+    bad_trailer = bytearray(unchecked)
+    struct.pack_into("<I", bad_trailer, FRAME_BYTES - 4, 1)
+    try:
+        parse_frame(bytes(bad_trailer))
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("skipped-CRC trailer test failed")
+    legacy = bytearray(data)
+    legacy[4] = LEGACY_VERSION
+    legacy[5] &= ~CRC_PRESENT_FLAG
+    struct.pack_into("<I", legacy, FRAME_BYTES - 4, zlib.crc32(legacy[:-4]))
+    legacy_frame = parse_frame(bytes(legacy))
+    assert legacy_frame.version == LEGACY_VERSION and legacy_frame.crc_checked
     print("combined protocol and GUI mapping self-test: PASS")
 
 

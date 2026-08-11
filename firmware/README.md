@@ -14,20 +14,29 @@ The complete module contains:
 - a Teensy 4.1 SPI-to-USB bridge;
 - Python GUIs for the complete module and standalone FSR tests.
 
-The combined protocol is an integrity-checked 1188-byte `ESK1` frame with
-CRC32. The current bridge uses **10 MHz Teensy hardware Mode-0 SPI**, STM32 SPI3
-full-duplex DMA, two ping-pong frame buffers and a 16-frame Teensy USB queue.
-The accepted output is paced to **700 complete packets/s**.
+The combined link uses a fixed 1188-byte `ESK1` frame, **10 MHz Teensy hardware
+Mode-0 SPI**, STM32 SPI3 full-duplex DMA, ping-pong STM32 buffers, and a
+16-frame Teensy USB queue. STM32 SYSCLK/HCLK and both APB buses are 80 MHz;
+ADC SPI1 and ACC SPI2 are 10 MHz.
 
-The combined STM32 firmware is now configured for an **80 MHz SYSCLK/HCLK**
-from the 16 MHz HSI through the PLL. APB1 and APB2 both run at 80 MHz; ADC SPI1
-and ACC SPI2 run at 10 MHz. FSR acquisition is rolling: one shared MUX address
-(32 values across both arrays) is updated per packet, so a complete 16-row
-matrix refresh is approximately 43.76 Hz. ACC samples update at 100 Hz.
+Two states are deliberately kept separate:
 
-Latest report: [`docs/updates/2026-08-10-700hz/PROGRESS_UPDATE.md`](docs/updates/2026-08-10-700hz/PROGRESS_UPDATE.md).
-It records every 700 Hz attempt, the rolling-scan data-freshness semantics and
-the final 60-second hardware acceptance result.
+- **Last pushed stable release:** branch `firmware-integration-20260810`,
+  commit `5468ec8`, transports 700.181 packets/s. It updates one FSR MUX
+  address per packet, so its fresh full-matrix rate is 43.76 Hz and its ACC
+  refresh rate is 100 Hz.
+- **Current experimental source and programmed boards:** protocol v2 scans all
+  16 MUX addresses for every frame, starts both ADC conversions in parallel,
+  overlaps the next MUX settle with FIFO reads, reads all nine ACC positions
+  every frame at a configured 1.344 kHz ODR, and samples CRC32 every 32 frames.
+  The validated complete-cycle rate is **238.475 Hz for 30 seconds**, with
+  100% transport acceptance and zero sampled-CRC/sequence/transport errors.
+
+The 700 fresh-scan target is not reached. The two MAX11633 devices currently
+share one serial readout path; its theoretical bandwidth is insufficient for
+700 complete dual-matrix scans/s even before software overhead. The required
+hardware path is documented in the latest report:
+[`docs/updates/2026-08-11-full-scan-700hz/PROGRESS_UPDATE.md`](docs/updates/2026-08-11-full-scan-700hz/PROGRESS_UPDATE.md).
 
 Standalone FSR GUIs display the unmodified 12-bit ADC values (`0..4095`). They
 do not load calibration files or apply normalisation. Historical calibration
@@ -49,6 +58,10 @@ Complete module: build/flash STM32, upload Teensy, then open the combined GUI:
 ```powershell
 & "D:\study\programming\ESKIN\firmware\tools\commands\flash_combined_pair.cmd" COM9
 ```
+
+This command deploys the current 238 Hz full-scan protocol-v2 experiment. Use
+commit `5468ec8` if the stable 700 packets/s rolling-acquisition release is
+required instead.
 
 Open the combined GUI manually after both processors are already programmed:
 
@@ -100,9 +113,10 @@ firmware/
 - Fresh STM32 builds are placed under `D:\study\programming\builds` because
   copied in-tree CMake caches contain obsolete absolute paths.
 
-Generated STM32 build trees, `.arduino-build`, Python caches, and live raw
-captures are intentionally excluded from Git. Source, scripts, historical
-calibration records, and documentation remain versioned.
+Generated STM32 build trees, `.arduino-build`, Python caches, and raw binary
+captures are intentionally excluded from Git. Text diagnostic summaries,
+source, scripts, historical calibration records, and documentation remain
+versioned.
 
 ## Documentation policy
 

@@ -5,7 +5,8 @@ older reports retain the state and conclusions valid on their dates.
 
 | Date | Report | Main subject |
 |---|---|---|
-| 2026-08-10 | [700 Hz update](2026-08-10-700hz/PROGRESS_UPDATE.md) | 10 MHz hardware Host SPI, rolling acquisition, CRC optimisation and 700.181 Hz acceptance |
+| 2026-08-11 | [700 Hz fresh-scan attempt](2026-08-11-full-scan-700hz/PROGRESS_UPDATE.md) | Full dual-FSR scans, per-frame ACC reads, periodic CRC experiment, 238.475 Hz result and hardware limit |
+| 2026-08-10 | [700 Hz transport update](2026-08-10-700hz/PROGRESS_UPDATE.md) | 10 MHz hardware Host SPI, rolling acquisition, CRC optimisation and 700.181 packets/s acceptance |
 | 2026-08-10 | [80 MHz validation update](2026-08-10-80mhz/PROGRESS_UPDATE.md) | STM32 80 MHz, NSS timing fix, 60-second hardware acceptance and 24.167 fps |
 | 2026-08-10 | [Performance update](2026-08-10/PROGRESS_UPDATE.md) | DMA, ping-pong buffering, 23.0 fps result and next optimisation flow |
 | 2026-08-05 | [Integration update](2026-08-05/PROGRESS_UPDATE.md) | First complete-module integration and reusable bring-up flow |

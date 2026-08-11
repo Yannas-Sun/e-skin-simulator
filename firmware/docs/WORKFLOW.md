@@ -7266,3 +7266,47 @@ Full bilingual attempt table, flow diagram, profile timings, and evidence:
 ```text
 docs/updates/2026-08-10-700hz/PROGRESS_UPDATE.md
 ```
+
+## 2026-08-11 — 700 Hz fresh full-scan experiment
+
+The stable rolling-acquisition version was first preserved and pushed as
+commit `5468ec8` on branch `firmware-integration-20260810`. A new experimental
+cycle then changed the acceptance target from 700 repeated full-size packets/s
+to 700 genuinely fresh cycles/s: each frame must scan both 16x16 FSR matrices,
+read all nine ACC positions, pack, and transfer within 1.4286 ms.
+
+Protocol v2 was introduced for the requested periodic-CRC test. Sequence
+multiples of 32 set flag `0x10` and carry IEEE CRC32; other frames have a zero
+trailer. Teensy and Python accept v1 and v2, enforce v2 cadence and trailer
+rules, and report checked/skipped counts. This reduces average STM32 CRC time
+from about 193 us to 6 us/frame, but leaves 31/32 payloads without CRC
+protection and is not a production integrity scheme.
+
+Measured software progression:
+
+```text
+full 16-address baseline             145.725/s
+overlap ADC1/ADC2 conversion         174.009/s
+overlap next MUX settle/FIFO reads   237.991/s
+block-copy two FSR matrices          248.577/s (ACC still old cadence)
+read all ACC positions every frame   238.014/s
+final 30-second diagnostic window    238.475/s
+```
+
+The final diagnostic window accepted 6,916/6,916 transfers with zero sampled
+CRC, magic, header, sequence, USB-short, or NSS-release errors and 3.123% CRC
+coverage. Independent parsing decoded 7,154 frames, sequence 43,962..51,115,
+zero gaps, zero rejected candidates, 16 fresh MUX addresses per frame, and a
+237.965/s payload-timestamp rate over 30.059 seconds.
+
+The remaining limit is physical. A 700/s, 16-address target permits only
+89.29 us/address. In MAX11633 external-clock mode, one 16-input ADC stream
+needs at least 53.3 us at the specified 4.8 MHz maximum; the two current ADCs
+share one serialized DOUT path and therefore need at least 106.7 us/address
+before MUX, ACC, packing, or software overhead. Reaching 700 fresh scans/s
+requires independent concurrent ADC readout paths and DMA, plus verified
+approximately 25-30 us analogue settling. Full evidence and the hardware plan:
+
+```text
+docs/updates/2026-08-11-full-scan-700hz/PROGRESS_UPDATE.md
+```

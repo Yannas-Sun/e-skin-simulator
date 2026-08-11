@@ -2,20 +2,23 @@
 
 本目录是 Windows 下构建、烧录、上传和启动监视器的统一入口。
 
-当前完整模块由 FSR1、FSR2 和 9 个 ACC 组成。组合 Teensy bridge 的
-Host SPI 当前为 `10 MHz` 硬件 Mode-0 SPI，STM32 SPI3 使用全双工 DMA，
-并使用两个 1188 字节乒乓缓冲区。IRQ/CS/hold 等待为
-`50/10/10 us`，Teensy 按 700 次/s 节拍读取。60 秒实测输出
-`700.181 packets/s`，CRC、magic、header、USB short 和 NSS release 错误均为 0。
-每包只更新两个 FSR 的同一个 MUX 地址，因此完整 16 地址刷新率为
-`43.76 Hz`；ACC 刷新率为 `100 Hz`。
+当前源码是 2026-08-11 的完整扫描实验版：Host SPI 为 `10 MHz` 硬件
+Mode-0 SPI，STM32 SPI3 使用全双工 DMA 和两个 1188 字节乒乓缓冲区；
+每帧扫描 FSR1/FSR2 的全部 16 个 MUX 地址，并读取 9 个 ACC 位置。
+30 秒实测为 `238.475 complete cycles/s`，接收率 100%，CRC 抽检、magic、
+header、sequence、USB short 和 NSS release 错误均为 0。协议 v2 每 32 帧
+携带一次 CRC，覆盖率约 3.125%；其余帧没有 CRC 保护。
+
+上一个已推送稳定版是 commit `5468ec8`：它达到 `700.181 packets/s`，但每包
+只更新一个 MUX 地址，因此完整 FSR 刷新率为 `43.76 Hz`。两个结果不可混用。
+完整记录见 `docs/updates/2026-08-11-full-scan-700hz/PROGRESS_UPDATE.md`。
 
 保存一次 20 秒完整诊断：
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
   "D:\study\programming\ESKIN\firmware\tools\capture_combined_diagnostics.ps1" `
-  -Port COM9 -DurationSeconds 20 -Label host_spi_250khz_soft_dma_pingpong
+  -Port COM9 -DurationSeconds 20 -Label fullscan_v2_validation
 ```
 
 目录结构：
@@ -82,7 +85,7 @@ PCB 形状的 16x16 热图。GUI 直接显示 STM32 原始 `0..4095` ADC 数据�
 
 ### `flash_combined_pair.cmd`
 
-完整执行生产组合固件部署：先构建/烧录 STM32 的 FSR1 + FSR2 + 9 ACC
+完整执行当前组合实验固件部署：先构建/烧录 STM32 的 FSR1 + FSR2 + 9 ACC
 固件，再编译/上传 Teensy `ESKIN_COMBINED_BRIDGE`，最后自动打开 Combined
 GUI 的 `all` 视图。关闭 GUI 窗口即可结束脚本。
 

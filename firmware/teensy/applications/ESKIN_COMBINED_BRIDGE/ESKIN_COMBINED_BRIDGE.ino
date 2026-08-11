@@ -27,6 +27,10 @@ constexpr size_t FRAME_BYTES = 1188;
 constexpr size_t USB_QUEUE_DEPTH = 16;
 constexpr size_t MAX_PREFIX_BYTES = 8;
 constexpr uint8_t MAGIC[4] = {0x45, 0x53, 0x4B, 0x31};
+constexpr uint8_t LEGACY_PROTOCOL_VERSION = 1;
+constexpr uint8_t PERIODIC_CRC_PROTOCOL_VERSION = 2;
+constexpr uint8_t FLAG_CRC_PRESENT = 0x10;
+constexpr uint32_t CRC_FRAME_INTERVAL = 32;
 
 uint8_t frame[FRAME_BYTES];
 uint8_t usbQueue[USB_QUEUE_DEPTH][FRAME_BYTES];
@@ -41,6 +45,7 @@ enum class FrameResult : uint8_t {
   Ok,
   BadMagic,
   BadHeader,
+  BadSequence,
   BadCrc,
   UsbUnavailable,
   UsbShortWrite,
@@ -55,6 +60,11 @@ uint32_t lastHostStartUs = 0;
 uint32_t lastWireCrc = 0;
 uint32_t lastCalculatedCrc = 0;
 uint32_t lastDiscardedPrefix = 0;
+uint32_t crcCheckedCount = 0;
+uint32_t crcSkippedCount = 0;
+uint32_t lastFrameSequence = 0;
+bool sequenceSeen = false;
+bool lastCrcSampled = false;
 bool usbConnectionSeen = false;
 uint32_t usbConnectedAtMs = 0;
 
@@ -143,12 +153,51 @@ FrameResult readCombinedFrame() {
   digitalWrite(STM32_CS_PIN, HIGH);
   if (!USE_SOFTWARE_SPI) SPI.endTransaction();
 
-  if (matched != sizeof(MAGIC)) return FrameResult::BadMagic;
+  if (matched != sizeof(MAGIC)) {
+    sequenceSeen = false;
+    return FrameResult::BadMagic;
+  }
   const uint16_t declared = (uint16_t)frame[6] | ((uint16_t)frame[7] << 8U);
-  if (frame[4] != 1U || declared != FRAME_BYTES) return FrameResult::BadHeader;
-  lastWireCrc = readU32LE(&frame[FRAME_BYTES - 4U]);
-  lastCalculatedCrc = crc32Ieee(frame, FRAME_BYTES - 4U);
-  if (lastCalculatedCrc != lastWireCrc) return FrameResult::BadCrc;
+  const uint8_t version = frame[4];
+  if (((version != LEGACY_PROTOCOL_VERSION) &&
+       (version != PERIODIC_CRC_PROTOCOL_VERSION)) ||
+      declared != FRAME_BYTES) {
+    sequenceSeen = false;
+    return FrameResult::BadHeader;
+  }
+  const uint32_t frameSequence = readU32LE(&frame[8]);
+  const bool crcPresent = (version == LEGACY_PROTOCOL_VERSION) ||
+                          ((frame[5] & FLAG_CRC_PRESENT) != 0U);
+  if ((version == PERIODIC_CRC_PROTOCOL_VERSION) &&
+      (crcPresent != ((frameSequence % CRC_FRAME_INTERVAL) == 0U))) {
+    sequenceSeen = false;
+    return FrameResult::BadHeader;
+  }
+  lastCrcSampled = crcPresent;
+  if (crcPresent) {
+    lastWireCrc = readU32LE(&frame[FRAME_BYTES - 4U]);
+    lastCalculatedCrc = crc32Ieee(frame, FRAME_BYTES - 4U);
+    ++crcCheckedCount;
+    if (lastCalculatedCrc != lastWireCrc) {
+      sequenceSeen = false;
+      return FrameResult::BadCrc;
+    }
+  } else {
+    lastWireCrc = 0U;
+    lastCalculatedCrc = 0U;
+    ++crcSkippedCount;
+    if (readU32LE(&frame[FRAME_BYTES - 4U]) != 0U) {
+      sequenceSeen = false;
+      return FrameResult::BadHeader;
+    }
+  }
+
+  if (sequenceSeen && (frameSequence != (lastFrameSequence + 1U))) {
+    lastFrameSequence = frameSequence;
+    return FrameResult::BadSequence;
+  }
+  lastFrameSequence = frameSequence;
+  sequenceSeen = true;
 
   if (!Serial) {
     usbConnectionSeen = false;
@@ -199,14 +248,15 @@ void printDiagnostics() {
   if (!Serial || (now - lastDiagnosticMs) < 1000U) return;
   lastDiagnosticMs = now;
   Serial.printf(
-      "#ESKDBG ms=%lu irq=%lu ok=%lu magic=%lu header=%lu crc=%lu "
+      "#ESKDBG ms=%lu irq=%lu ok=%lu magic=%lu header=%lu sequence=%lu crc=%lu "
       "usb_off=%lu usb_short=%lu release_timeout=%lu irq_level=%u "
-      "usb_sent=%lu queue=%u queue_high=%u\r\n",
+      "usb_sent=%lu queue=%u queue_high=%u crc_checked=%lu crc_skipped=%lu\r\n",
       (unsigned long)now,
       (unsigned long)irqCount,
       (unsigned long)resultCounts[static_cast<size_t>(FrameResult::Ok)],
       (unsigned long)resultCounts[static_cast<size_t>(FrameResult::BadMagic)],
       (unsigned long)resultCounts[static_cast<size_t>(FrameResult::BadHeader)],
+      (unsigned long)resultCounts[static_cast<size_t>(FrameResult::BadSequence)],
       (unsigned long)resultCounts[static_cast<size_t>(FrameResult::BadCrc)],
       (unsigned long)resultCounts[static_cast<size_t>(FrameResult::UsbUnavailable)],
       (unsigned long)resultCounts[static_cast<size_t>(FrameResult::UsbShortWrite)],
@@ -214,7 +264,9 @@ void printDiagnostics() {
       digitalRead(STM32_IRQ_PIN) == HIGH ? 1U : 0U,
       (unsigned long)usbFramesSent,
       (unsigned int)usbQueueCount,
-      (unsigned int)usbQueueHighWater);
+      (unsigned int)usbQueueHighWater,
+      (unsigned long)crcCheckedCount,
+      (unsigned long)crcSkippedCount);
   Serial.printf(
       "#ESKFIRST %02X %02X %02X %02X %02X %02X %02X %02X "
       "%02X %02X %02X %02X %02X %02X %02X %02X\r\n",
@@ -222,11 +274,13 @@ void printDiagnostics() {
       frame[4], frame[5], frame[6], frame[7],
       frame[8], frame[9], frame[10], frame[11],
       frame[12], frame[13], frame[14], frame[15]);
-  Serial.printf("#ESKCRC wire=%08lX calc=%08lX spi_hz=%lu soft_spi=%u\r\n",
-                (unsigned long)lastWireCrc,
-                (unsigned long)lastCalculatedCrc,
-                (unsigned long)SPI_HZ,
-                USE_SOFTWARE_SPI ? 1U : 0U);
+  Serial.printf("#ESKCRC wire=%08lX calc=%08lX spi_hz=%lu soft_spi=%u "
+                "sampled=%u\r\n",
+                 (unsigned long)lastWireCrc,
+                 (unsigned long)lastCalculatedCrc,
+                 (unsigned long)SPI_HZ,
+                 USE_SOFTWARE_SPI ? 1U : 0U,
+                 lastCrcSampled ? 1U : 0U);
   Serial.printf("#ESKALIGN discarded_prefix=%lu\r\n",
                 (unsigned long)lastDiscardedPrefix);
 }

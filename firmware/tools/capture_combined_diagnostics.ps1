@@ -83,6 +83,15 @@ if ($dbgLines.Count -ge 2) {
     $crc = $last.crc - $first.crc
     $magic = $last.magic - $first.magic
     $header = $last.header - $first.header
+    $sequence = if ($first.ContainsKey("sequence") -and $last.ContainsKey("sequence")) {
+        $last.sequence - $first.sequence
+    } else { 0 }
+    $crcChecked = if ($first.ContainsKey("crc_checked") -and $last.ContainsKey("crc_checked")) {
+        $last.crc_checked - $first.crc_checked
+    } else { $irq }
+    $crcSkipped = if ($first.ContainsKey("crc_skipped") -and $last.ContainsKey("crc_skipped")) {
+        $last.crc_skipped - $first.crc_skipped
+    } else { 0 }
     $usbOff = $last.usb_off - $first.usb_off
     $usbShort = $last.usb_short - $first.usb_short
     $release = $last.release_timeout - $first.release_timeout
@@ -91,6 +100,9 @@ if ($dbgLines.Count -ge 2) {
     $summary += "delta_crc=$crc"
     $summary += "delta_magic=$magic"
     $summary += "delta_header=$header"
+    $summary += "delta_sequence=$sequence"
+    $summary += "delta_crc_checked=$crcChecked"
+    $summary += "delta_crc_skipped=$crcSkipped"
     $summary += "delta_usb_off=$usbOff"
     $summary += "delta_usb_short=$usbShort"
     $summary += "delta_release_timeout=$release"
@@ -104,7 +116,13 @@ if ($dbgLines.Count -ge 2) {
     }
     if ($irq -gt 0) {
         $summary += "acceptance_percent=$([Math]::Round(100.0 * $ok / $irq, 3))"
-        $summary += "crc_error_percent=$([Math]::Round(100.0 * $crc / $irq, 3))"
+        if ($crcChecked -gt 0) {
+            $summary += "crc_error_percent=$([Math]::Round(100.0 * $crc / $crcChecked, 3))"
+        }
+        $crcObserved = $crcChecked + $crcSkipped
+        if ($crcObserved -gt 0) {
+            $summary += "crc_coverage_percent=$([Math]::Round(100.0 * $crcChecked / $crcObserved, 3))"
+        }
         $summary += "transfer_rate_hz=$([Math]::Round($irq / $measuredSeconds, 3))"
         $readyAttempts = $irq - $usbOff
         if ($readyAttempts -gt 0) {
