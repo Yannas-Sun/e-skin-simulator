@@ -3,7 +3,20 @@
 本目录是 Windows 下构建、烧录、上传和启动监视器的统一入口。
 
 当前完整模块由 FSR1、FSR2 和 9 个 ACC 组成。组合 Teensy bridge 的
-Host SPI 实际配置为 `100 kHz`，IRQ/CS/hold 等待为 `1000/1000/100 us`。
+Host SPI 当前为 `10 MHz` 硬件 Mode-0 SPI，STM32 SPI3 使用全双工 DMA，
+并使用两个 1188 字节乒乓缓冲区。IRQ/CS/hold 等待为
+`50/10/10 us`，Teensy 按 700 次/s 节拍读取。60 秒实测输出
+`700.181 packets/s`，CRC、magic、header、USB short 和 NSS release 错误均为 0。
+每包只更新两个 FSR 的同一个 MUX 地址，因此完整 16 地址刷新率为
+`43.76 Hz`；ACC 刷新率为 `100 Hz`。
+
+保存一次 20 秒完整诊断：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
+  "D:\study\programming\ESKIN\firmware\tools\capture_combined_diagnostics.ps1" `
+  -Port COM9 -DurationSeconds 20 -Label host_spi_250khz_soft_dma_pingpong
+```
 
 目录结构：
 

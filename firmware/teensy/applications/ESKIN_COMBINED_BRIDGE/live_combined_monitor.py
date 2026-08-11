@@ -68,6 +68,9 @@ class CombinedFrame:
     fsr1: np.ndarray
     fsr2: np.ndarray
     acc: tuple[AccSample, ...]
+    updated_mux_address: int = 0xFF
+    mux_addresses_updated: int = 16
+    profile_us: tuple[int, int, int, int] = (0, 0, 0, 0)
 
 
 def parse_frame(data: bytes) -> CombinedFrame:
@@ -90,12 +93,16 @@ def parse_frame(data: bytes) -> CombinedFrame:
     fsr2 = np.frombuffer(data, dtype="<u2", count=FSR_WORDS, offset=offset).copy()
     offset += FSR_WORDS * 2
     samples: list[AccSample] = []
+    reserved: list[tuple[int, int]] = []
     for _ in range(ACC_COUNT):
         values = struct.unpack_from("<BBhhhBBHBB", data, offset)
         samples.append(AccSample(*values))
+        reserved.append((data[offset + 14], data[offset + 15]))
         offset += ACC_RECORD_BYTES
+    profiles = tuple((low | (high << 8)) for low, high in reserved[1:5])
     return CombinedFrame(flags, sequence, stm32_ms, fsr1.reshape(ROWS, COLS),
-                         fsr2.reshape(ROWS, COLS), tuple(samples))
+                         fsr2.reshape(ROWS, COLS), tuple(samples),
+                         reserved[0][0], reserved[0][1], profiles)
 
 
 def read_exact(port: serial.Serial, count: int) -> bytes:
@@ -376,7 +383,8 @@ class CombinedGui:
         self.title.set_text(
             f"{self.mode} | frame {frame.sequence} | source {self.source_fps:.1f} fps | "
             f"display {self.render_fps:.1f} fps | FSR flags {frame.flags & 3:02b} | "
-            f"ACC {valid_count}/9 | CRC OK")
+            f"ACC {valid_count}/9 | MUX {frame.updated_mux_address} "
+            f"(+{frame.mux_addresses_updated}) | CRC OK")
 
     def _update(self, _index: int) -> None:
         newest = None
@@ -420,13 +428,23 @@ def self_test() -> None:
         struct.pack_into("<H", data, offset, value)
         offset += 2
     for index in range(ACC_COUNT):
+        reserved_low = 5 if index == 0 else 0
+        reserved_high = 1 if index == 0 else 0
+        if 1 <= index <= 4:
+            reserved_value = 100 + index
+            reserved_low = reserved_value & 0xFF
+            reserved_high = reserved_value >> 8
         struct.pack_into("<BBhhhBBHBB", data, offset, 0x33, 0,
                          index, -index, 1000, 0x57, 0x88, 0, 1, 0xFF)
+        data[offset + 14] = reserved_low
+        data[offset + 15] = reserved_high
         offset += ACC_RECORD_BYTES
     struct.pack_into("<I", data, FRAME_BYTES - 4, zlib.crc32(data[:-4]))
     frame = parse_frame(bytes(data))
     assert frame.sequence == 123 and frame.fsr1[0, 0] == 0
     assert frame.fsr2[-1, -1] == 511 and frame.acc[8].y == -8
+    assert frame.updated_mux_address == 5 and frame.mux_addresses_updated == 1
+    assert frame.profile_us == (101, 102, 103, 104)
     test = np.arange(256).reshape(16, 16)
     assert oriented_fsr(test)[0, 0] == test[15, 0]
     assert oriented_fsr(test)[15, 15] == test[0, 15]

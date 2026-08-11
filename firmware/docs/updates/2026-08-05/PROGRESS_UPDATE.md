@@ -1,5 +1,8 @@
 # E-SKIN Progress Update — 5 August 2026
 
+> Historical report. The current measured performance and ordered optimisation
+> workflow are in the [10 August 2026 update](../2026-08-10/PROGRESS_UPDATE.md).
+
 ## Executive summary
 
 The first complete E-SKIN module is now operational as one end-to-end system:

@@ -1,67 +1,53 @@
-# E-SKIN combined monitor
+# ESKIN combined Teensy bridge
 
-This Teensy 4.1 application bridges one integrity-checked STM32 frame containing
-both 16 x 16 FSR arrays and all nine accelerometers. The binary protocol uses a
-four-byte `ESK1` magic, version, acquisition flags, frame length, 32-bit sequence,
-STM32 timestamp, both raw ADC matrices, nine ACC records, and CRC32.
+The Teensy 4.1 is the Host SPI master and USB bridge for the STM32 combined
+firmware. It waits for the STM32 IRQ, clocks one 1188-byte `ESK1` frame from
+SPI3, validates its IEEE CRC32, and queues valid frames for non-blocking USB
+Serial output to the Python GUI.
 
-Host SPI is currently set to the conservative **100 kHz** bring-up timing
-with IRQ/CS/hold waits of **1000/1000/100 us**. This isolates the Host link after
-the 1 MHz plus 100/100/50 us trial produced no valid-frame LED. STM32-side FSR
-and ACC acquisition optimizations remain active. Increase only one Host
-parameter at a time after CRC-valid hardware operation is confirmed: first
-test 500 kHz with the stable waits, then shorten waits, then test 1 MHz.
+## Active settings
 
-## Built-in LED warning and serial diagnostics
+| Setting | Value |
+|---|---:|
+| Teensy CPU | 600 MHz default Teensy 4.1 build (`F_CPU=600000000`) |
+| Host SPI | hardware LPSPI, Mode 0 |
+| SCK | 10 MHz |
+| Target transfer rate | 700 frames/s |
+| Transfer period | 1428 us integer pacing |
+| IRQ settle / CS setup / CS hold | 50 / 10 / 10 us |
+| USB queue | 16 x 1188-byte frames |
 
-On Teensy 4.1, `LED_BUILTIN` and the default SPI SCK are both GPIO13. The
-onboard LED therefore flashes during Host SPI clock activity and cannot be used
-as a valid-frame indicator. The bridge no longer configures or writes that pin
-as an LED GPIO.
+The Teensy controls Host SCK. The STM32 is the SPI slave and cannot select that
+clock rate. The 700 Hz pacing prevents a faster producer from overflowing the
+sustained USB path; without pacing, the same Release firmware produced about
+883 transactions/s but dropped queued USB frames.
 
-Once per second the bridge emits an ASCII line alongside the binary stream:
+Only CRC-valid frames enter the USB queue. Diagnostics report IRQ count,
+accepted frames, CRC/magic/header errors, release timeouts, USB queue drops,
+queue high-water mark, and Teensy `millis()` so the capture tool can calculate
+rates over the actual diagnostic interval.
 
-```text
-#ESKDBG irq=... ok=... magic=... header=... crc=... usb_off=... usb_short=... release_timeout=... irq_level=...
-```
+At 700 packets/s the STM32 updates one shared FSR MUX address per packet, so a
+complete 16-address FSR refresh is 43.76 Hz. ACC samples are refreshed at
+100 Hz. See `docs/updates/2026-08-10-700hz/PROGRESS_UPDATE.md` for the complete
+attempt history and final 60-second validation.
 
-Close the Python GUI before opening Arduino Serial Monitor. A rising `irq`
-count proves GPIO2 detects STM32 HOST_IRQ. `magic`, `header`, or `crc` identifies
-the exact rejected-frame stage. Diagnostic lines do not alter the `ESK1` frame
-format; the Python parser skips them while searching for the next frame magic.
+## Upload and monitor
 
-## Arduino IDE
-
-Install **Teensyduino / Teensy boards**, select **Teensy 4.1**, USB type
-**Serial**, open `ESKIN_COMBINED_BRIDGE.ino`, then Upload. `SPI` and USB Serial
-are built into the Teensy core; no third-party Arduino library is required.
-
-## Monitor
+Complete paired deployment:
 
 ```powershell
-python -m pip install pyserial numpy matplotlib
+& "D:\study\programming\ESKIN\firmware\tools\commands\flash_combined_pair.cmd" COM9
+```
+
+Open only the GUI after firmware is already installed:
+
+```powershell
 & "D:\study\programming\ESKIN\firmware\tools\commands\start_combined_monitor.cmd" COM9 all
-python -u live_combined_monitor.py --port COM9
 ```
 
-Use the **All / FSR1 / FSR2 / ACC** selector in the right side of the window,
-or choose the initial panel from the command line:
+Parser/CRC self-test without hardware:
 
 ```powershell
-& "D:\study\programming\ESKIN\firmware\tools\commands\start_combined_monitor.cmd" COM9 fsr1
-python -u live_combined_monitor.py --port COM9 --view acc
-```
-
-The two FSR panels use the original hexagonal PCB shape, physical transpose,
-left-right mirror, and R/C numbering. The ACC panel uses the original mirrored
-3 x 3 physical layout and 3D vector orientation.
-
-See `docs/COMMAND_REFERENCE.md` for every GUI flag and all centralized commands.
-
-Offline verification and display:
-
-```powershell
-python live_combined_monitor.py --self-test
-python live_combined_monitor.py --demo
-python live_combined_monitor.py --demo --view fsr2
+python -B "D:\study\programming\ESKIN\firmware\teensy\applications\ESKIN_COMBINED_BRIDGE\live_combined_monitor.py" --self-test
 ```

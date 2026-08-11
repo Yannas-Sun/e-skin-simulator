@@ -6,7 +6,7 @@ set "SOURCE=%ROOT%\stm32\applications\combined_system"
 set "BUILD=D:\study\programming\builds\ESKIN_COMBINED_SYSTEM"
 set "PROBE_UID=LU_2022_8888"
 
-cmake --fresh -S "%SOURCE%" -B "%BUILD%" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE="%SOURCE%\cmake\gcc-arm-none-eabi.cmake"
+cmake --fresh -S "%SOURCE%" -B "%BUILD%" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="%SOURCE%\cmake\gcc-arm-none-eabi.cmake"
 if errorlevel 1 exit /b 1
 cmake --build "%BUILD%" -j 4
 if errorlevel 1 exit /b 1

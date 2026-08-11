@@ -4,21 +4,38 @@
 
 constexpr uint8_t STM32_CS_PIN = 10;
 constexpr uint8_t STM32_IRQ_PIN = 2;
+constexpr uint8_t STM32_MOSI_PIN = 11;
+constexpr uint8_t STM32_MISO_PIN = 12;
+constexpr uint8_t STM32_SCK_PIN = 13;
 constexpr uint32_t USB_BAUD = 2000000;
-// Isolation fallback after the 1 MHz/short-setup trial produced no valid LED.
-// Keep STM32 acquisition optimizations active while returning only the Host
-// link to the last known stable timing. Re-test faster values one step at a
-// time after valid CRC frames are restored.
-constexpr uint32_t SPI_HZ = 100000;
-constexpr uint32_t IRQ_SETTLE_US = 1000;
-constexpr uint32_t CS_SETUP_US = 1000;
-constexpr uint32_t CS_HOLD_US = 100;
+// 700 complete 1188-byte frames/s require at least 6.653 MHz on the wire.
+// Use the Teensy 4.1 LPSPI peripheral at 10 MHz, leaving timing margin above
+// the mathematical minimum while remaining well below the STM32G474 slave
+// full-duplex limit. STM32 remains full-duplex DMA with ping-pong buffers.
+constexpr uint32_t SPI_HZ = 10000000;
+constexpr bool USE_SOFTWARE_SPI = false;
+constexpr uint32_t TARGET_FRAME_HZ = 700;
+constexpr uint32_t HOST_PERIOD_US = 1000000U / TARGET_FRAME_HZ;
+constexpr uint32_t SPI_HALF_PERIOD_US = 1000000U / (2U * SPI_HZ);
+constexpr uint32_t IRQ_SETTLE_US = 50;
+constexpr uint32_t CS_SETUP_US = 10;
+constexpr uint32_t CS_HOLD_US = 10;
 constexpr uint32_t IRQ_RELEASE_TIMEOUT_MS = 1500;
+constexpr uint32_t USB_WRITE_TIMEOUT_MS = 100;
+constexpr uint32_t USB_CONNECTION_SETTLE_MS = 500;
 constexpr size_t FRAME_BYTES = 1188;
+constexpr size_t USB_QUEUE_DEPTH = 16;
 constexpr size_t MAX_PREFIX_BYTES = 8;
 constexpr uint8_t MAGIC[4] = {0x45, 0x53, 0x4B, 0x31};
 
 uint8_t frame[FRAME_BYTES];
+uint8_t usbQueue[USB_QUEUE_DEPTH][FRAME_BYTES];
+size_t usbQueueHead = 0;
+size_t usbQueueTail = 0;
+size_t usbQueueCount = 0;
+size_t usbQueueOffset = 0;
+size_t usbQueueHighWater = 0;
+uint32_t usbFramesSent = 0;
 
 enum class FrameResult : uint8_t {
   Ok,
@@ -34,9 +51,12 @@ uint32_t resultCounts[static_cast<size_t>(FrameResult::Count)] = {};
 uint32_t irqCount = 0;
 uint32_t irqReleaseTimeoutCount = 0;
 uint32_t lastDiagnosticMs = 0;
+uint32_t lastHostStartUs = 0;
 uint32_t lastWireCrc = 0;
 uint32_t lastCalculatedCrc = 0;
 uint32_t lastDiscardedPrefix = 0;
+bool usbConnectionSeen = false;
+uint32_t usbConnectedAtMs = 0;
 
 uint32_t readU32LE(const uint8_t *value) {
   return (uint32_t)value[0] | ((uint32_t)value[1] << 8U) |
@@ -64,9 +84,26 @@ bool waitForLevel(uint8_t pin, uint8_t level, uint32_t timeoutMs) {
   return true;
 }
 
+uint8_t hostSpiTransfer(uint8_t output) {
+  if (!USE_SOFTWARE_SPI) return SPI.transfer(output);
+
+  uint8_t input = 0;
+  for (uint8_t mask = 0x80; mask != 0; mask >>= 1U) {
+    digitalWriteFast(STM32_MOSI_PIN, (output & mask) ? HIGH : LOW);
+    delayMicroseconds(SPI_HALF_PERIOD_US);
+    digitalWriteFast(STM32_SCK_PIN, HIGH);
+    if (digitalReadFast(STM32_MISO_PIN)) input |= mask;
+    delayMicroseconds(SPI_HALF_PERIOD_US);
+    digitalWriteFast(STM32_SCK_PIN, LOW);
+  }
+  return input;
+}
+
 FrameResult readCombinedFrame() {
   delayMicroseconds(IRQ_SETTLE_US);
-  SPI.beginTransaction(SPISettings(SPI_HZ, MSBFIRST, SPI_MODE0));
+  if (!USE_SOFTWARE_SPI) {
+    SPI.beginTransaction(SPISettings(SPI_HZ, MSBFIRST, SPI_MODE0));
+  }
   digitalWrite(STM32_CS_PIN, LOW);
   delayMicroseconds(CS_SETUP_US);
 
@@ -78,7 +115,7 @@ FrameResult readCombinedFrame() {
   size_t clocks = 0;
   size_t matched = 0;
   while (matched < sizeof(MAGIC) && clocks < MAX_PREFIX_BYTES) {
-    const uint8_t value = SPI.transfer(0x00);
+    const uint8_t value = hostSpiTransfer(0x00);
     ++clocks;
     if (value == MAGIC[matched]) {
       frame[matched++] = value;
@@ -93,18 +130,18 @@ FrameResult readCombinedFrame() {
   if (matched == sizeof(MAGIC)) {
     lastDiscardedPrefix = clocks - sizeof(MAGIC);
     for (size_t i = sizeof(MAGIC); i < FRAME_BYTES; ++i) {
-      frame[i] = SPI.transfer(0x00);
+      frame[i] = hostSpiTransfer(0x00);
     }
   } else {
     lastDiscardedPrefix = clocks;
     while (clocks < FRAME_BYTES) {
-      (void)SPI.transfer(0x00);
+      (void)hostSpiTransfer(0x00);
       ++clocks;
     }
   }
   delayMicroseconds(CS_HOLD_US);
   digitalWrite(STM32_CS_PIN, HIGH);
-  SPI.endTransaction();
+  if (!USE_SOFTWARE_SPI) SPI.endTransaction();
 
   if (matched != sizeof(MAGIC)) return FrameResult::BadMagic;
   const uint16_t declared = (uint16_t)frame[6] | ((uint16_t)frame[7] << 8U);
@@ -113,11 +150,48 @@ FrameResult readCombinedFrame() {
   lastCalculatedCrc = crc32Ieee(frame, FRAME_BYTES - 4U);
   if (lastCalculatedCrc != lastWireCrc) return FrameResult::BadCrc;
 
-  if (!Serial) return FrameResult::UsbUnavailable;
-  if (Serial.write(frame, FRAME_BYTES) != FRAME_BYTES) {
-    return FrameResult::UsbShortWrite;
+  if (!Serial) {
+    usbConnectionSeen = false;
+    return FrameResult::UsbUnavailable;
   }
+  if (!usbConnectionSeen) {
+    usbConnectionSeen = true;
+    usbConnectedAtMs = millis();
+    return FrameResult::UsbUnavailable;
+  }
+  if ((millis() - usbConnectedAtMs) < USB_CONNECTION_SETTLE_MS) {
+    return FrameResult::UsbUnavailable;
+  }
+  /* Do not block the next STM32 transaction on USB endpoint scheduling.
+   * Queue the complete CRC-valid frame and let loop() drain it only when the
+   * Teensy USB stack reports available space. */
+  if (usbQueueCount >= USB_QUEUE_DEPTH) return FrameResult::UsbShortWrite;
+  memcpy(usbQueue[usbQueueTail], frame, FRAME_BYTES);
+  usbQueueTail = (usbQueueTail + 1U) % USB_QUEUE_DEPTH;
+  ++usbQueueCount;
+  if (usbQueueCount > usbQueueHighWater) usbQueueHighWater = usbQueueCount;
   return FrameResult::Ok;
+}
+
+void drainUsbQueue() {
+  if (!Serial) return;
+  while (usbQueueCount > 0U) {
+    const int available = Serial.availableForWrite();
+    if (available <= 0) return;
+    const size_t remaining = FRAME_BYTES - usbQueueOffset;
+    const size_t chunk = (remaining < (size_t)available)
+                           ? remaining : (size_t)available;
+    const size_t written = Serial.write(
+        usbQueue[usbQueueHead] + usbQueueOffset, chunk);
+    if (written == 0U) return;
+    usbQueueOffset += written;
+    if (usbQueueOffset == FRAME_BYTES) {
+      usbQueueOffset = 0U;
+      usbQueueHead = (usbQueueHead + 1U) % USB_QUEUE_DEPTH;
+      --usbQueueCount;
+      ++usbFramesSent;
+    }
+  }
 }
 
 void printDiagnostics() {
@@ -125,8 +199,10 @@ void printDiagnostics() {
   if (!Serial || (now - lastDiagnosticMs) < 1000U) return;
   lastDiagnosticMs = now;
   Serial.printf(
-      "#ESKDBG irq=%lu ok=%lu magic=%lu header=%lu crc=%lu "
-      "usb_off=%lu usb_short=%lu release_timeout=%lu irq_level=%u\r\n",
+      "#ESKDBG ms=%lu irq=%lu ok=%lu magic=%lu header=%lu crc=%lu "
+      "usb_off=%lu usb_short=%lu release_timeout=%lu irq_level=%u "
+      "usb_sent=%lu queue=%u queue_high=%u\r\n",
+      (unsigned long)now,
       (unsigned long)irqCount,
       (unsigned long)resultCounts[static_cast<size_t>(FrameResult::Ok)],
       (unsigned long)resultCounts[static_cast<size_t>(FrameResult::BadMagic)],
@@ -135,7 +211,10 @@ void printDiagnostics() {
       (unsigned long)resultCounts[static_cast<size_t>(FrameResult::UsbUnavailable)],
       (unsigned long)resultCounts[static_cast<size_t>(FrameResult::UsbShortWrite)],
       (unsigned long)irqReleaseTimeoutCount,
-      digitalRead(STM32_IRQ_PIN) == HIGH ? 1U : 0U);
+      digitalRead(STM32_IRQ_PIN) == HIGH ? 1U : 0U,
+      (unsigned long)usbFramesSent,
+      (unsigned int)usbQueueCount,
+      (unsigned int)usbQueueHighWater);
   Serial.printf(
       "#ESKFIRST %02X %02X %02X %02X %02X %02X %02X %02X "
       "%02X %02X %02X %02X %02X %02X %02X %02X\r\n",
@@ -143,10 +222,11 @@ void printDiagnostics() {
       frame[4], frame[5], frame[6], frame[7],
       frame[8], frame[9], frame[10], frame[11],
       frame[12], frame[13], frame[14], frame[15]);
-  Serial.printf("#ESKCRC wire=%08lX calc=%08lX spi_hz=%lu\r\n",
+  Serial.printf("#ESKCRC wire=%08lX calc=%08lX spi_hz=%lu soft_spi=%u\r\n",
                 (unsigned long)lastWireCrc,
                 (unsigned long)lastCalculatedCrc,
-                (unsigned long)SPI_HZ);
+                (unsigned long)SPI_HZ,
+                USE_SOFTWARE_SPI ? 1U : 0U);
   Serial.printf("#ESKALIGN discarded_prefix=%lu\r\n",
                 (unsigned long)lastDiscardedPrefix);
 }
@@ -155,14 +235,24 @@ void setup() {
   pinMode(STM32_CS_PIN, OUTPUT);
   digitalWrite(STM32_CS_PIN, HIGH);
   pinMode(STM32_IRQ_PIN, INPUT_PULLDOWN);
-  // Teensy 4.1 LED_BUILTIN is pin 13, which is also the default SPI SCK pin.
-  // Never drive it as a status GPIO while the Host SPI bus is active.
-  SPI.begin();
+  if (USE_SOFTWARE_SPI) {
+    pinMode(STM32_MOSI_PIN, OUTPUT);
+    pinMode(STM32_MISO_PIN, INPUT);
+    pinMode(STM32_SCK_PIN, OUTPUT);
+    digitalWriteFast(STM32_MOSI_PIN, LOW);
+    digitalWriteFast(STM32_SCK_PIN, LOW);
+  } else {
+    SPI.begin();
+  }
   Serial.begin(USB_BAUD);
 }
 
 void loop() {
-  if (digitalRead(STM32_IRQ_PIN) == HIGH) {
+  const uint32_t nowUs = micros();
+  if ((digitalRead(STM32_IRQ_PIN) == HIGH) &&
+      ((lastHostStartUs == 0U) ||
+       ((uint32_t)(nowUs - lastHostStartUs) >= HOST_PERIOD_US))) {
+    lastHostStartUs = nowUs;
     ++irqCount;
     const FrameResult result = readCombinedFrame();
     ++resultCounts[static_cast<size_t>(result)];
@@ -170,5 +260,6 @@ void loop() {
       ++irqReleaseTimeoutCount;
     }
   }
+  drainUsbQueue();
   printDiagnostics();
 }

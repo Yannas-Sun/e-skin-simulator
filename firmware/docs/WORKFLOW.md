@@ -6777,3 +6777,492 @@ Implemented correction on both sides:
 
 Acceptance result to capture after paired reflash/upload: `magic=0`, `crc=0`,
 `ok` increasing, matching wire/calculated CRC, and stable alignment count.
+
+# 2026-08-10 — Controlled Host SPI increase to 500 kHz
+
+The Teensy combined bridge Host SPI clock was increased from 100 kHz to
+500 kHz. The IRQ settle, CS setup, and CS hold delays remain unchanged at
+1000/1000/100 us, so this test changes only the wire clock. STM32 SPI3 remains
+an externally clocked Mode-0 slave and does not require reflashing for this
+step. One 1188-byte frame now has a wire time of approximately 19.0 ms and a
+wire-only ceiling of approximately 52.6 frames/s.
+
+Upload command:
+
+```powershell
+& "D:\study\programming\ESKIN\firmware\tools\commands\upload_teensy_sketch.cmd" `
+  "D:\study\programming\ESKIN\firmware\teensy\applications\ESKIN_COMBINED_BRIDGE" `
+  COM9 TEENSY_COMBINED_BRIDGE
+```
+
+Acceptance criteria are continuously increasing `ok`, `magic=0`, `header=0`,
+`crc=0`, `release_timeout=0`, matching `wire`/`calc` CRC values, no sequence
+gaps in the GUI, and a stable alignment count. If any criterion fails, restore
+`SPI_HZ=100000` before changing acquisition or handshake timing.
+
+500 kHz runtime result: **FAIL**. During a six-second DTR-enabled COM9 capture,
+the cumulative counters changed from approximately `ok=14, crc=695` to
+`ok=63, crc=732`: about 49 accepted frames and 37 new CRC failures. Magic
+remained zero, alignment remained `discarded_prefix=0`, IRQ released normally,
+and individual frames alternated between matching and mismatched wire/calculated
+CRC values. This localises the failure to intermittent corruption within the
+long frame rather than frame-start alignment. The active test setting was
+therefore reduced to 250 kHz with all waits unchanged.
+
+At 250 kHz, one 1188-byte frame takes approximately 38.0 ms on the wire and has
+a wire-only ceiling of approximately 26.3 frames/s. Apply the same acceptance
+criteria before retaining it; otherwise restore the verified 100 kHz fallback.
+
+250 kHz runtime result: **FAIL**. A ten-second DTR-enabled COM9 capture initially
+showed accepted frames, then CRC failures became continuous and the transfer
+rate degraded to approximately one transaction per second. The observed
+counters progressed from `irq=310, ok=0, crc=116` through
+`irq=331, ok=15, crc=122`, then to `irq=336, ok=15, crc=127`. Throughout the
+failure, `magic=0`, `header=0`, `release_timeout=0`, and
+`discarded_prefix=0`; wire/calculated CRC values diverged on the failed frames.
+This setting was rejected and the active bridge was restored to the 100 kHz
+fallback with 1000/1000/100 us IRQ/CS/hold waits.
+
+Final 100 kHz recovery result: **still intermittent CRC failure**. The combined
+STM32 image rebuilt successfully (19,884 bytes Flash, 5,472 bytes RAM), pyOCD
+confirmed all 20 programmed pages were identical, and a hardware reset
+completed. The matching 100 kHz Teensy bridge was also rebuilt and uploaded.
+During the following ten-second capture, counters progressed from approximately
+`irq=379, ok=31, crc=175` to `irq=517, ok=128, crc=216`: about 97 newly accepted
+frames and 41 new CRC failures. `magic=0`, `header=0`, `release_timeout=0`, and
+`discarded_prefix=0` remained stable. Therefore Host clock alone is not the
+root cause; current evidence points to corruption within the 1188-byte transfer
+or the STM32/physical SPI path. Leave the device at 100 kHz, but do not mark the
+current long-frame acceptance as passed.
+
+# 2026-08-10 — Host SPI low-frequency CRC isolation
+
+Objective: determine whether the intermittent 1188-byte CRC failures depend on
+Host SPI clock frequency. Change only the Teensy SCK setting; keep the STM32
+image, Mode 0, 1188-byte `ESK1` protocol, CRC32 implementation, and
+1000/1000/100 us IRQ/CS/hold waits unchanged.
+
+First isolation point: reduce Host SPI from 100 kHz to 50 kHz. One frame takes
+approximately 190.1 ms on the wire, for a wire-only ceiling of approximately
+5.26 frames/s. A new capture utility saves every test instead of retaining data
+only in terminal memory:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
+  "D:\study\programming\ESKIN\firmware\tools\capture_combined_diagnostics.ps1" `
+  -Port COM9 -DurationSeconds 20 -Label host_spi_50khz
+```
+
+Outputs are written under `docs\test_results`:
+
+- `.bin`: complete raw USB serial capture, including accepted binary frames and
+  ASCII diagnostics;
+- `.txt`: test parameters, counter deltas, acceptance/CRC percentages, transfer
+  rate, and extracted `#ESK...` lines.
+
+Decision rule: if 50 kHz materially lowers the CRC error rate relative to the
+approximately 29.7% 100 kHz sample, frequency/signal timing is involved. If it
+does not, test 25 kHz; persistent errors at both lower rates make a pure SCK
+frequency limit unlikely and shift priority to STM32 SPI3 FIFO/HAL state,
+buffer integrity, or a physical intermittent connection.
+
+The first 50 kHz hardware-SPI capture is **invalid as a frequency comparison**.
+Although firmware reported `spi_hz=50000`, 20 seconds produced 362 transactions
+(18.1/s), which is physically impossible for 1188 bytes at 50 kHz. Inspection
+of Teensyduino 1.62.0 `SPI.h` showed that Teensy 4.x `beginTransaction()` limits
+the LPSPI clock divisor to 257. Requests below the resulting hardware minimum
+are therefore clamped rather than generated exactly. The capture is retained at
+`docs/test_results/20260810_140929_host_spi_50khz.*` for audit, but its 39.503%
+CRC result must not be labelled an actual 50 kHz result.
+
+For the controlled low-frequency test only, the bridge now uses GPIO11 MOSI,
+GPIO12 MISO, and GPIO13 SCK as a software Mode-0 SPI master with a 10 us
+half-period. This generates approximately 50 kHz independently of the LPSPI
+divisor clamp. CS, IRQ, frame parsing, CRC, and all handshake delays are
+unchanged. Diagnostics identify this build with `soft_spi=1`.
+
+Valid software-SPI 50 kHz result: **preliminary PASS**. The saved 20-second
+capture contained 85 measured transactions, all 85 accepted, with zero CRC,
+magic, header, or IRQ-release errors. Measured transaction rate was 4.25/s,
+which is physically plausible for a 1188-byte frame at approximately 50 kHz.
+Every sampled `wire` and `calc` CRC matched, and diagnostics confirmed
+`spi_hz=50000 soft_spi=1` and `discarded_prefix=0`.
+
+Saved evidence:
+
+- `docs/test_results/20260810_141218_host_spi_50khz_soft.bin`
+- `docs/test_results/20260810_141218_host_spi_50khz_soft.txt`
+
+Compared with the approximately 29.7% CRC error observed in the earlier
+hardware-SPI run labelled 100 kHz, this strongly associates the failures with
+Host SCK timing/signal integrity. It is not yet proof of frequency alone because
+software SPI also changes GPIO edge shape and the sampling instant. Retain the
+50 kHz software test build while collecting a longer run; then test controlled
+software-SPI steps such as 75 and 100 kHz to locate the boundary.
+
+## Controlled software-SPI 100 kHz point
+
+After the valid 50 kHz result, change only `SPI_HZ` from 50000 to 100000 while
+retaining `USE_SOFTWARE_SPI=true`, Mode 0, the 1188-byte frame, CRC32, and
+1000/1000/100 us IRQ/CS/hold waits. The software half-period changes from 10 us
+to 5 us. The expected wire time is approximately 95.0 ms per frame and the
+wire-only ceiling is approximately 10.5 frames/s. Save the test as
+`host_spi_100khz_soft` and compare its CRC error rate directly with the saved
+50 kHz software result.
+
+100 kHz software-SPI result: **CRC PASS, complete-system FAIL**. The saved
+20-second capture contained 13 measured transactions and all 13 were accepted:
+`delta_crc=0`, `delta_magic=0`, `delta_header=0`, and
+`delta_release_timeout=0`. Diagnostics confirmed `spi_hz=100000 soft_spi=1`,
+so the observed CRC error rate was 0%.
+
+However, the measured transaction rate was only 0.65/s. Consecutive STM32 frame
+timestamps increased by approximately 1556 ms, closely matching
+`HOST_TIMEOUT_MS=1500`. Teensy therefore received a complete CRC-valid frame,
+but STM32's blocking `HAL_SPI_TransmitReceive()` did not finish normally and
+waited for its timeout/recovery path before producing the next frame. This point
+is rejected for normal operation even though its received CRC acceptance was
+100%.
+
+Saved evidence:
+
+- `docs/test_results/20260810_142110_host_spi_100khz_soft.bin`
+- `docs/test_results/20260810_142110_host_spi_100khz_soft.txt`
+
+Interpretation: raw SCK frequency alone does not explain the earlier CRC
+corruption, because software Mode-0 at 100 kHz delivered CRC-clean frames. The
+hardware-LPSPI edge/sampling behaviour is implicated in the CRC errors, while
+the STM32 full-duplex polling completion path is separately implicated in the
+software-100-kHz throughput collapse. Restore the active bridge to the
+50 kHz software-SPI point, which passed both CRC and throughput acceptance.
+
+# 2026-08-10 — STM32 SPI3 full-duplex DMA stage 1
+
+The STM32 Host SPI3 transport was changed from blocking CPU polling to
+full-duplex DMA. DMA1 Channel1 uses the `SPI3_RX` DMAMUX request to drain all
+Teensy MOSI dummy bytes into `host_rx`; DMA1 Channel2 uses the `SPI3_TX` request
+to feed the 1188-byte `ESK1` frame from `host_tx` to MISO. Both channels use
+byte alignment, incrementing memory, fixed peripheral address, normal mode,
+and very-high priority. DMA and SPI3 error interrupts are enabled.
+
+The ordering is deliberately:
+
+1. abort/reinitialize SPI3 to clear stale state;
+2. arm `HAL_SPI_TransmitReceive_DMA()` for both directions;
+3. assert `HOST_IRQ` only after DMA is ready;
+4. let Teensy assert NSS and supply SCK;
+5. complete through `HAL_SPI_TxRxCpltCallback()` or recover through the DMA/SPI
+   error and timeout paths;
+6. lower `HOST_IRQ` and reuse the buffers only after completion.
+
+This is DMA stage 1: it removes CPU FIFO polling but intentionally waits for DMA
+completion before starting the next acquisition. It therefore validates FIFO,
+IRQ, timeout, alignment, and CRC behaviour without simultaneously introducing
+double-buffer ownership. Stage 2 will add two frame buffers so CPU acquisition
+of frame N+1 can overlap DMA transmission of frame N.
+
+Initial validation target remains the accepted Teensy software Mode-0 50 kHz
+configuration. Required result: increasing DMA completion count, no DMA errors
+or timeouts, `crc=0`, `release_timeout=0`, `discarded_prefix=0`, and normal
+approximately 4–5 frame/s throughput before testing higher SCK rates.
+
+## Full-duplex DMA hardware validation
+
+Build and flash completed successfully. The DMA image uses 24,300 bytes Flash
+and 5,672 bytes RAM. PyOCD erased/programmed 24 pages and performed a hardware
+reset.
+
+At the initial software-SPI 50 kHz point, the saved 20-second capture reported:
+
+```text
+delta_irq=87
+delta_ok=87
+delta_crc=0
+acceptance_percent=100
+crc_error_percent=0
+transfer_rate_hz=4.35
+```
+
+Evidence:
+
+- `docs/test_results/20260810_145656_host_spi_50khz_soft_stm32_dma.bin`
+- `docs/test_results/20260810_145656_host_spi_50khz_soft_stm32_dma.txt`
+
+The same DMA image was then tested with a true software Mode-0 100 kHz SCK. The
+saved 20-second result was:
+
+```text
+delta_irq=147
+delta_ok=147
+delta_crc=0
+delta_magic=0
+delta_header=0
+delta_release_timeout=0
+acceptance_percent=100
+crc_error_percent=0
+transfer_rate_hz=7.35
+```
+
+Evidence:
+
+- `docs/test_results/20260810_145806_host_spi_100khz_soft_stm32_dma.bin`
+- `docs/test_results/20260810_145806_host_spi_100khz_soft_stm32_dma.txt`
+
+This replaces the pre-DMA 100 kHz result of 0.65 frame/s and approximately
+1556 ms between STM32 timestamps. Full-duplex DMA therefore removed the primary
+blocking-completion timeout at this clock while preserving zero CRC errors.
+The active accepted configuration is now software Mode-0 100 kHz on Teensy and
+full-duplex SPI3 DMA on STM32. It is still stage 1 (DMA completion is awaited);
+double buffering and hardware-SPI frequency increases remain separate steps.
+
+# 2026-08-10 — STM32 DMA software ping-pong buffers
+
+Stage 2 introduces two independent 1188-byte TX buffers and two matching RX
+dummy buffers. `host_send_index` is owned exclusively by SPI3 DMA, while the CPU
+scans FSR1, FSR2, and all ACC devices and packs the next CRC-protected frame into
+`host_fill_index`. After DMA completion, the indices swap. The CPU never writes
+the buffer marked for transmission.
+
+The first loop iteration primes one complete frame. Steady-state operation is:
+
+```text
+DMA sends frame N from buffer A
+    concurrently with
+CPU acquisition/CRC packing of frame N+1 into buffer B
+
+DMA completion -> A becomes free -> swap A/B
+```
+
+DMA completion and error callbacks immediately lower `HOST_IRQ`, so Teensy does
+not wait for the CPU acquisition running in parallel. If DMA start fails, the
+ready frame is retained for retry. If an active transfer fails or times out, the
+newly filled alternate frame becomes the next send candidate after SPI3
+recovery. SPI3 reinitialization remains in the per-transfer start path for this
+validation stage because it previously removed stale-prefix state; removing
+that reinitialization is deferred until long-run alignment remains zero.
+
+Expected 100 kHz result: wire time remains approximately 95 ms, but acquisition
+and CRC work should overlap most of it. Complete source rate should rise from
+7.35 fps toward the wire ceiling of 10.5 fps, with zero CRC, magic, header,
+alignment, DMA, and IRQ-release errors.
+
+## DMA ping-pong validation result
+
+Build and flash passed. The ping-pong image uses 24,624 bytes Flash and 8,056
+bytes RAM; the additional RAM is the expected second 1188-byte TX buffer and
+second 1188-byte RX dummy buffer. PyOCD programmed the image and performed a
+hardware reset.
+
+The saved 20-second 100 kHz software-SPI capture reported:
+
+```text
+delta_irq=209
+delta_ok=209
+delta_crc=0
+delta_magic=0
+delta_header=0
+delta_release_timeout=0
+acceptance_percent=100
+crc_error_percent=0
+transfer_rate_hz=10.45
+```
+
+Independent parsing of the saved raw stream found 215 complete binary `ESK1`
+frames, sequence 95 through 309, with zero sequence gaps. This confirms that
+the throughput gain did not come from retransmitting an old buffer or
+overwriting the DMA-owned buffer.
+
+Evidence:
+
+- `docs/test_results/20260810_151704_host_spi_100khz_soft_stm32_dma_pingpong.bin`
+- `docs/test_results/20260810_151704_host_spi_100khz_soft_stm32_dma_pingpong.txt`
+
+Result: **PASS**. Relative to DMA stage 1, throughput increased from 7.35 to
+10.45 frame/s and reached 99.3% of the 100 kHz wire-only ceiling of 10.52
+frame/s, while CRC and sequence integrity remained perfect for this short run.
+The active configuration is now 100 kHz software Mode-0 Host SPI, STM32 SPI3
+full-duplex DMA, and two software ping-pong frame buffers.
+
+# 2026-08-10 — Raise Host SPI to the acquisition-matched point
+
+The pre-overlap single-buffer measurements imply approximately 41 ms of FSR,
+ACC, frame-pack, and CRC work per complete frame. A 1188-byte frame contains
+9504 wire bits, so the Host clock that makes transport time approximately equal
+to acquisition time is `9504 / 0.041`, or about 232 kHz. Select the standard
+250 kHz test point rather than increasing directly to 500 kHz.
+
+Only the Teensy software Mode-0 `SPI_HZ` changes from 100000 to 250000. STM32
+full-duplex DMA, ping-pong ownership, 1188-byte protocol, CRC32, IRQ/CS/hold
+waits, and all sensor acquisition settings remain unchanged. At nominal
+250 kHz, wire time is 38.016 ms and the wire-only ceiling is 26.3 frame/s. The
+expected complete rate is approximately 20–25 frame/s because acquisition now
+becomes the similar or slower pipeline stage.
+
+Acceptance requires zero CRC/magic/header/release errors, zero sequence gaps,
+and a substantial increase over the accepted 10.45 frame/s at 100 kHz. If it
+fails, restore the accepted 100 kHz DMA ping-pong configuration.
+
+The first two 250 kHz captures each showed zero SPI/CRC/header/IRQ errors and
+21.3 transactions/s, but exactly one `USB short write` immediately after DTR
+opened. Each capture therefore reported 425 accepted frames out of 426 IRQs;
+the first raw stream contained one matching sequence gap. The short write was a
+USB connection-start race, not Host SPI corruption: `crc`, `magic`, `header`,
+and `release_timeout` remained unchanged, and all later frames were accepted.
+
+The Teensy USB forwarding path now retries partial `Serial.write()` operations
+until all 1188 bytes are queued or a 100 ms timeout expires. It never starts a
+diagnostic/result decision after merely writing a prefix of a binary frame.
+Revalidate 250 kHz after upload; acceptance now requires no new
+`usb_short` count and zero binary sequence gaps as well as zero CRC errors.
+
+The partial-write retry alone still observed exactly one 100 ms USB timeout
+after each DTR connection, while all Host SPI/CRC counters remained clean. This
+confirms a USB CDC endpoint-start race rather than sustained bandwidth pressure.
+The bridge now tracks the disconnected-to-connected transition and waits 500 ms
+before forwarding the first binary frame. Frames acquired during this settling
+window are counted as `usb_off` and discarded whole; no partial frame enters the
+USB stream. Diagnostic text may flow during the window to let the endpoint
+become ready. The existing full-frame retry remains active after settling.
+
+## 250 kHz final validation
+
+With the 500 ms USB connection-settling window, the saved 20-second capture
+reported 460 acquisition/Host transactions. Twelve complete frames were
+deliberately classified `usb_off` during connection settling; after that, all
+448 measured frames were accepted. There were no new `usb_short`, CRC, magic,
+header, or IRQ-release errors.
+
+```text
+delta_irq=460
+delta_ok=448
+delta_usb_off=12 (intentional connection settling)
+delta_usb_short=0
+delta_crc=0
+transaction_rate=23.0 Hz
+USB output rate=22.4 frame/s
+USB-ready acceptance=448/448 = 100%
+```
+
+Independent parsing found 457 complete binary frames, sequence 9610 through
+10066, with zero sequence gaps. The differing binary/count window endpoints are
+caused by diagnostics being sampled inside the raw-capture interval, not by
+lost frames.
+
+Evidence:
+
+- `docs/test_results/20260810_152754_host_spi_250khz_soft_dma_pingpong_usb_settle.bin`
+- `docs/test_results/20260810_152754_host_spi_250khz_soft_dma_pingpong_usb_settle.txt`
+
+Result: **PASS**. The active configuration is nominal 250 kHz software Mode-0
+Host SPI, STM32 full-duplex DMA, and ping-pong buffers. At 23.0 transactions/s,
+one complete pipeline cycle is approximately 43.5 ms. The nominal Host wire
+time is 38.0 ms, so sensor acquisition/packing is now the slightly slower stage.
+Further Host-frequency increases alone should give little improvement until the
+FSR/ACC phase timings are instrumented and reduced.
+
+## 2026-08-10 documentation update and next optimisation flow
+
+The measured progression, line chart, bilingual summary and full acceptance
+criteria are consolidated in:
+
+```text
+docs/updates/2026-08-10/PROGRESS_UPDATE.md
+```
+
+The next work keeps the `ESK1` frame and CRC32 unchanged and changes only one
+timing variable per experiment:
+
+1. Instrument FSR1, FSR2, ACC, packing/CRC, DMA and total cycle time.
+2. Start ADC1 and ADC2 conversions together so conversion time overlaps.
+3. Test MUX settling at 100, 75, 50 and 25 us, validating analogue accuracy and
+   crosstalk in addition to CRC.
+4. Test ACC SPI2 at 1 and 2 MHz while preserving valid data from all positions.
+5. Revalidate Teensy hardware LPSPI at 500 kHz, 1 MHz, 2 MHz and 4 MHz now that
+   the STM32 full-duplex DMA receiver is active.
+6. Raise the STM32 clock from 16 MHz to a validated 80 MHz configuration, then
+   consider 170 MHz only after recalculating timing and peripheral dividers.
+7. Require zero CRC errors, sequence gaps, DMA errors and post-settle USB short
+   writes for 1000 frames, followed by 10,000 frames or at least 60 seconds.
+
+Target cycle limits are 20 ms for 50 complete frames/s and 10 ms for 100
+complete frames/s. Additional buffers may reduce jitter, but will not raise
+sustained throughput unless acquisition or transfer time is reduced.
+
+## 2026-08-10 — STM32 combined-system clock raised to 80 MHz
+
+The combined STM32 application now derives an 80 MHz SYSCLK/HCLK from the
+internal 16 MHz HSI through PLLM=4, PLLN=40 and PLLR=2. Voltage scale 1 remains
+active and Flash latency is increased from zero to two wait states.
+
+SPI1 and SPI2 only provide power-of-two baud prescalers, so their exact former
+8 MHz and 500 kHz rates cannot be retained from an 80 MHz peripheral clock.
+For the first CPU-clock validation, both sensor buses are deliberately kept
+conservative:
+
+```text
+SPI1 ADC: 80 MHz APB2 / 16 = 5 MHz
+SPI2 ACC: 20 MHz APB1 / 64 = 312.5 kHz
+SPI3 Host: external Teensy software Mode-0 SCK remains nominal 250 kHz
+```
+
+The 100 us MUX settling delay uses DWT cycles calculated from
+`SystemCoreClock`, so its real-time duration remains 100 us after the clock
+change. HAL millisecond timeouts continue to use the reconfigured SysTick.
+
+Initial 80 MHz tests exposed a timing race that the slower 16 MHz acquisition
+had hidden. The STM32 could finish the next acquisition and start aborting and
+reinitialising SPI3 before Teensy released NSS/CS after its 100 us hold. This
+produced alternating incomplete transfers, stale prefix bytes, approximately
+50% CRC failures and about 0.6 transactions/s. Reducing APB1 to 20 MHz and
+replacing `__WFI()` with polling did not change the failure, ruling out the
+peripheral clock and CPU sleep as root causes.
+
+The accepted fix waits for hardware NSS on PA15 to return high before SPI3 is
+aborted, reinitialised and armed for the next DMA transaction. The wait has a
+10 ms diagnostic timeout and increments `host_dma_timeout_count` if Teensy
+does not release CS.
+
+The final 60-second capture is:
+
+```text
+docs/test_results/20260810_195415_stm32_80mhz_nss_release_guard_soft250_60s.txt
+STM32 IRQ / completed: 1450 / 1438
+CRC / magic / header errors: 0 / 0 / 0
+post-settle USB short writes / NSS release timeouts: 0 / 0
+transaction rate: 24.167 Hz
+effective USB output: 23.967 frames/s
+USB-ready acceptance: 1438 / 1438 = 100%
+```
+
+Independent raw parsing found one capture/USB-startup boundary gap, followed
+by 1427 consecutive CRC-valid frames (sequence 3756 through 5182) with zero
+steady-state gaps. This passes the required 1000-frame hardware gate. Compared
+with the accepted 16 MHz result of 23.0 transactions/s, the transaction rate
+increased by 5.1%; Host SPI wire time at nominal 250 kHz is now the dominant
+limit rather than the STM32 CPU clock.
+
+## 2026-08-10 — 700 Hz packet transport achieved
+
+The next optimisation cycle reached stable 700 Hz complete-packet transport.
+The final architecture uses 10 MHz hardware Host SPI, one shared FSR MUX
+address per packet, 100 Hz ACC refresh, table-driven CRC32, STM32 SPI3
+full-duplex DMA ping-pong buffers, a 16-frame Teensy USB queue, and explicit
+700/s pacing. STM32 is built at 80 MHz; the accepted Teensy 4.1 build uses its
+default 600 MHz `F_CPU` setting.
+
+The Release build initially exposed an NSS race that caused alternating DMA
+timeouts and stale prefixes. Increasing only Teensy CS timing did not fix it.
+Requiring PA15/NSS to remain high for 50 us before STM32 abort/reinitialise/
+rearm fixed the race. An unpaced test then reached 883 transactions/s but
+overflowed sustained USB output, so the final producer is paced at 700/s.
+
+Final 60-second result: 41,331/41,331 diagnostic-window transfers accepted,
+700.181 packets/s, and zero CRC, magic, header, USB-short, sequence-gap, or NSS
+release-timeout errors. Because one of 16 MUX addresses is refreshed per
+packet, complete FSR matrix freshness is 43.76 Hz; ACC freshness is 100 Hz.
+
+Full bilingual attempt table, flow diagram, profile timings, and evidence:
+
+```text
+docs/updates/2026-08-10-700hz/PROGRESS_UPDATE.md
+```

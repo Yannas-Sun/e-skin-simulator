@@ -17,6 +17,7 @@ extern void Combined_ReinitializeHostSPI(void);
 #define MAX11633_SCAN_0_TO_15 0xF8U
 #define ADC_TIMEOUT_MS 5U
 #define FSR_MUX_SETTLE_US 100U
+#define FSR_ROWS_PER_OUTPUT_FRAME 1U
 
 #define ACC_WHO_REG 0x0FU
 #define ACC_WHO_EXPECTED 0x33U
@@ -28,6 +29,7 @@ extern void Combined_ReinitializeHostSPI(void);
 #define ACC_READ 0x80U
 #define ACC_INCREMENT 0x40U
 #define ACC_TIMEOUT_MS 10U
+#define ACC_SAMPLE_INTERVAL_MS 10U
 #define ACC_HEALTH_SLOT_MS 100U
 
 #define COMBINED_MAGIC_0 0x45U /* E */
@@ -42,6 +44,7 @@ extern void Combined_ReinitializeHostSPI(void);
 #define CRC_BYTES 4U
 #define COMBINED_FRAME_BYTES (HEADER_BYTES + (2U * FSR_BYTES) + ACC_BYTES + CRC_BYTES)
 #define HOST_TIMEOUT_MS 1500U
+#define HOST_NSS_RELEASE_TIMEOUT_MS 10U
 
 enum
 {
@@ -70,11 +73,29 @@ typedef struct
 static uint16_t fsr1[FSR_ROWS][FSR_COLS];
 static uint16_t fsr2[FSR_ROWS][FSR_COLS];
 static AccSample acc[ACC_COUNT];
-static uint8_t host_tx[COMBINED_FRAME_BYTES];
-static uint8_t host_rx[COMBINED_FRAME_BYTES];
+static uint8_t host_tx[2][COMBINED_FRAME_BYTES];
+static uint8_t host_rx[2][COMBINED_FRAME_BYTES];
 static uint32_t sequence;
 static uint32_t last_acc_health_ms;
+static uint32_t last_acc_sample_ms;
 static uint8_t acc_health_cursor;
+static uint8_t fsr_row_cursor;
+static uint8_t last_fsr_row;
+static uint8_t last_fsr_rows_updated;
+static uint8_t host_send_index;
+static uint8_t host_fill_index = 1U;
+static uint8_t host_pipeline_primed;
+static volatile uint8_t host_dma_complete;
+static volatile uint8_t host_dma_error;
+static volatile uint8_t host_dma_active;
+static volatile uint32_t host_dma_complete_count;
+static volatile uint32_t host_dma_error_count;
+static volatile uint32_t host_dma_timeout_count;
+static uint16_t profile_fsr_us;
+static uint16_t profile_acc_us;
+static uint16_t profile_pack_us;
+static uint16_t profile_dma_wait_us;
+static uint32_t crc32_table[256];
 
 static void delay_us(uint32_t microseconds)
 {
@@ -91,6 +112,13 @@ static void delay_us_init(void)
   DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 }
 
+static uint16_t elapsed_us_saturated(uint32_t started)
+{
+  const uint32_t cycles_per_us = SystemCoreClock / 1000000U;
+  const uint32_t elapsed = (DWT->CYCCNT - started) / cycles_per_us;
+  return (elapsed > 0xFFFFU) ? 0xFFFFU : (uint16_t)elapsed;
+}
+
 static void put_u16(uint8_t *buffer, uint32_t *offset, uint16_t value)
 {
   buffer[(*offset)++] = (uint8_t)value;
@@ -103,17 +131,26 @@ static void put_u32(uint8_t *buffer, uint32_t *offset, uint32_t value)
   put_u16(buffer, offset, (uint16_t)(value >> 16U));
 }
 
-static uint32_t crc32_ieee(const uint8_t *data, uint32_t length)
+static void crc32_init(void)
 {
-  uint32_t crc = 0xFFFFFFFFU;
-  for (uint32_t i = 0U; i < length; ++i)
+  for (uint32_t value = 0U; value < 256U; ++value)
   {
-    crc ^= data[i];
+    uint32_t crc = value;
     for (uint8_t bit = 0U; bit < 8U; ++bit)
     {
       const uint32_t mask = (uint32_t)-(int32_t)(crc & 1U);
       crc = (crc >> 1U) ^ (0xEDB88320U & mask);
     }
+    crc32_table[value] = crc;
+  }
+}
+
+static uint32_t crc32_ieee(const uint8_t *data, uint32_t length)
+{
+  uint32_t crc = 0xFFFFFFFFU;
+  for (uint32_t i = 0U; i < length; ++i)
+  {
+    crc = crc32_table[(crc ^ data[i]) & 0xFFU] ^ (crc >> 8U);
   }
   return ~crc;
 }
@@ -188,20 +225,23 @@ static HAL_StatusTypeDef adc_read16(uint16_t cs_pin, uint16_t eoc_pin,
   return HAL_OK;
 }
 
-static uint8_t scan_fsr_both(void)
+static uint8_t scan_fsr_rows(uint8_t row_count)
 {
   uint16_t values1[FSR_COLS];
   uint16_t values2[FSR_COLS];
   uint8_t fsr1_ok = 1U;
   uint8_t fsr2_ok = 1U;
+  last_fsr_rows_updated = row_count;
 
   /*
    * Both analogue MUXes share the same four address lines but have separate
    * enables and ADCs. Enable both after each address change, wait once, then
    * acquire both arrays. FSR2 keeps its established reversed/transposed map.
    */
-  for (uint8_t mux_address = 0U; mux_address < FSR_ROWS; ++mux_address)
+  for (uint8_t row = 0U; row < row_count; ++row)
   {
+    const uint8_t mux_address = fsr_row_cursor;
+    last_fsr_row = mux_address;
     select_mux(mux_address);
     HAL_GPIO_WritePin(GPIOA, MUX_EN1_Pin, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(GPIOB, MUX_EN2_Pin, GPIO_PIN_RESET);
@@ -241,10 +281,13 @@ static uint8_t scan_fsr_both(void)
         fsr2[adc_index][mux_index] = values2[adc_index];
       }
     }
+
+    fsr_row_cursor = (uint8_t)((fsr_row_cursor + 1U) % FSR_ROWS);
   }
 
-  if (fsr1_ok == 0U) { memset(fsr1, 0, sizeof(fsr1)); }
-  if (fsr2_ok == 0U) { memset(fsr2, 0, sizeof(fsr2)); }
+  /* Keep the last valid rows when one rolling acquisition fails. Clearing a
+   * complete 16x16 matrix here would turn one transient row error into 16
+   * frames of artificial zero data. The status bits still expose the error. */
   return (uint8_t)((fsr1_ok != 0U ? 0x01U : 0U) |
                    (fsr2_ok != 0U ? 0x02U : 0U));
 }
@@ -366,19 +409,24 @@ static HAL_StatusTypeDef acc_read_axes(uint8_t index)
 
 static void scan_acc(void)
 {
-  for (uint8_t index = 0U; index < ACC_COUNT; ++index)
+  const uint32_t now = HAL_GetTick();
+  if ((now - last_acc_sample_ms) >= ACC_SAMPLE_INTERVAL_MS)
   {
-    if (acc[index].ready == 0U) { continue; }
-    if (acc_read_axes(index) != HAL_OK)
+    for (uint8_t index = 0U; index < ACC_COUNT; ++index)
     {
-      acc[index].status = ACC_STATUS_DATA_ERROR;
-      acc[index].ready = 0U;
-      acc[index].x = acc[index].y = acc[index].z = 0;
+      if (acc[index].ready == 0U) { continue; }
+      if (acc_read_axes(index) != HAL_OK)
+      {
+        acc[index].status = ACC_STATUS_DATA_ERROR;
+        acc[index].ready = 0U;
+        acc[index].x = acc[index].y = acc[index].z = 0;
+      }
+      else
+      {
+        acc[index].status = ACC_STATUS_OK;
+      }
     }
-    else
-    {
-      acc[index].status = ACC_STATUS_OK;
-    }
+    last_acc_sample_ms = now;
   }
 
   /*
@@ -411,47 +459,85 @@ static void scan_acc(void)
   }
 }
 
-static void pack_frame(uint8_t flags)
+static void pack_frame(uint8_t *target, uint8_t flags)
 {
   uint32_t offset = 0U;
-  host_tx[offset++] = COMBINED_MAGIC_0;
-  host_tx[offset++] = COMBINED_MAGIC_1;
-  host_tx[offset++] = COMBINED_MAGIC_2;
-  host_tx[offset++] = COMBINED_MAGIC_3;
-  host_tx[offset++] = COMBINED_VERSION;
-  host_tx[offset++] = flags;
-  put_u16(host_tx, &offset, COMBINED_FRAME_BYTES);
-  put_u32(host_tx, &offset, sequence++);
-  put_u32(host_tx, &offset, HAL_GetTick());
+  target[offset++] = COMBINED_MAGIC_0;
+  target[offset++] = COMBINED_MAGIC_1;
+  target[offset++] = COMBINED_MAGIC_2;
+  target[offset++] = COMBINED_MAGIC_3;
+  target[offset++] = COMBINED_VERSION;
+  target[offset++] = flags;
+  put_u16(target, &offset, COMBINED_FRAME_BYTES);
+  put_u32(target, &offset, sequence++);
+  put_u32(target, &offset, HAL_GetTick());
 
   for (uint8_t row = 0U; row < FSR_ROWS; ++row)
     for (uint8_t col = 0U; col < FSR_COLS; ++col)
-      put_u16(host_tx, &offset, fsr1[row][col]);
+      put_u16(target, &offset, fsr1[row][col]);
   for (uint8_t row = 0U; row < FSR_ROWS; ++row)
     for (uint8_t col = 0U; col < FSR_COLS; ++col)
-      put_u16(host_tx, &offset, fsr2[row][col]);
+      put_u16(target, &offset, fsr2[row][col]);
 
   for (uint8_t i = 0U; i < ACC_COUNT; ++i)
   {
-    host_tx[offset++] = acc[i].who;
-    host_tx[offset++] = acc[i].status;
-    put_u16(host_tx, &offset, (uint16_t)acc[i].x);
-    put_u16(host_tx, &offset, (uint16_t)acc[i].y);
-    put_u16(host_tx, &offset, (uint16_t)acc[i].z);
-    host_tx[offset++] = acc[i].ctrl1;
-    host_tx[offset++] = acc[i].ctrl4;
-    put_u16(host_tx, &offset, acc[i].spi_error);
-    host_tx[offset++] = acc[i].idle_miso;
-    host_tx[offset++] = acc[i].command_rx;
-    host_tx[offset++] = 0U;
-    host_tx[offset++] = 0U;
+    target[offset++] = acc[i].who;
+    target[offset++] = acc[i].status;
+    put_u16(target, &offset, (uint16_t)acc[i].x);
+    put_u16(target, &offset, (uint16_t)acc[i].y);
+    put_u16(target, &offset, (uint16_t)acc[i].z);
+    target[offset++] = acc[i].ctrl1;
+    target[offset++] = acc[i].ctrl4;
+    put_u16(target, &offset, acc[i].spi_error);
+    target[offset++] = acc[i].idle_miso;
+    target[offset++] = acc[i].command_rx;
+    /* The two formerly reserved bytes in ACC record 0 describe rolling FSR
+     * freshness without changing the 1188-byte protocol: last updated shared
+     * MUX address, then number of addresses updated for this packet. */
+    if (i == 0U)
+    {
+      target[offset++] = last_fsr_row;
+      target[offset++] = last_fsr_rows_updated;
+    }
+    else
+    {
+      uint16_t profile = 0U;
+      if (i == 1U) { profile = profile_fsr_us; }
+      if (i == 2U) { profile = profile_acc_us; }
+      if (i == 3U) { profile = profile_pack_us; }
+      if (i == 4U) { profile = profile_dma_wait_us; }
+      put_u16(target, &offset, profile);
+    }
   }
-  const uint32_t crc = crc32_ieee(host_tx, offset);
-  put_u32(host_tx, &offset, crc);
+  const uint32_t crc = crc32_ieee(target, offset);
+  put_u32(target, &offset, crc);
 }
 
-static HAL_StatusTypeDef send_frame(void)
+static HAL_StatusTypeDef start_frame_dma(uint8_t buffer_index)
 {
+  /* At 80 MHz the CPU can finish frame N+1 before the Teensy has completed
+   * the 100 us CS hold for frame N. Never reset/re-arm SPI3 while hardware NSS
+   * is still low; doing so exposed three stale FIFO bytes and alternating DMA
+   * completion timeouts that the slower 16 MHz acquisition path had hidden. */
+  const uint32_t nss_started = HAL_GetTick();
+  while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_15) == GPIO_PIN_RESET)
+  {
+    if ((HAL_GetTick() - nss_started) >= HOST_NSS_RELEASE_TIMEOUT_MS)
+    {
+      ++host_dma_timeout_count;
+      return HAL_TIMEOUT;
+    }
+  }
+  /* At 10 MHz, DMA completion precedes the master's physical NSS release by
+   * only a few microseconds. Keep NSS high for a short stable interval before
+   * resetting SPI3 so the peripheral fully closes the previous slave frame. */
+  delay_us(50U);
+  if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_15) == GPIO_PIN_RESET)
+  {
+    ++host_dma_timeout_count;
+    return HAL_BUSY;
+  }
+
   /*
    * A repeated two-byte prefix before ESK1 showed that SPI3 retained stale TX
    * state between slave transactions. Reset the peripheral before publishing
@@ -459,17 +545,79 @@ static HAL_StatusTypeDef send_frame(void)
    */
   (void)HAL_SPI_Abort(&hspi3);
   Combined_ReinitializeHostSPI();
+  host_dma_complete = 0U;
+  host_dma_error = 0U;
+  host_dma_active = 0U;
+
+  /* Arm both DMA directions before publishing HOST_IRQ. This guarantees that
+   * TX can feed MISO and RX can drain every MOSI dummy byte before the Teensy
+   * supplies the first SCK edge. */
+  HAL_StatusTypeDef status = HAL_SPI_TransmitReceive_DMA(
+      &hspi3, host_tx[buffer_index], host_rx[buffer_index],
+      COMBINED_FRAME_BYTES);
+  if (status != HAL_OK)
+  {
+    ++host_dma_error_count;
+    return status;
+  }
+
+  host_dma_active = 1U;
   HAL_GPIO_WritePin(GPIOB, HOST_IRQ_Pin, GPIO_PIN_SET);
-  HAL_StatusTypeDef status = HAL_SPI_TransmitReceive(
-      &hspi3, host_tx, host_rx, COMBINED_FRAME_BYTES, HOST_TIMEOUT_MS);
+  return HAL_OK;
+}
+
+static HAL_StatusTypeDef wait_frame_dma(void)
+{
+  const uint32_t started = HAL_GetTick();
+  while ((host_dma_complete == 0U) && (host_dma_error == 0U) &&
+         ((HAL_GetTick() - started) < HOST_TIMEOUT_MS))
+  {
+    __WFI();
+  }
   HAL_GPIO_WritePin(GPIOB, HOST_IRQ_Pin, GPIO_PIN_RESET);
-  return status;
+  host_dma_active = 0U;
+
+  if (host_dma_complete != 0U)
+  {
+    return HAL_OK;
+  }
+
+  (void)HAL_SPI_Abort(&hspi3);
+  if (host_dma_error != 0U)
+  {
+    return HAL_ERROR;
+  }
+  ++host_dma_timeout_count;
+  return HAL_TIMEOUT;
+}
+
+void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+  if (hspi->Instance == SPI3)
+  {
+    host_dma_complete = 1U;
+    host_dma_active = 0U;
+    HAL_GPIO_WritePin(GPIOB, HOST_IRQ_Pin, GPIO_PIN_RESET);
+    ++host_dma_complete_count;
+  }
+}
+
+void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
+{
+  if (hspi->Instance == SPI3)
+  {
+    host_dma_error = 1U;
+    host_dma_active = 0U;
+    HAL_GPIO_WritePin(GPIOB, HOST_IRQ_Pin, GPIO_PIN_RESET);
+    ++host_dma_error_count;
+  }
 }
 
 void CombinedAcquisition_Init(void)
 {
   GPIO_InitTypeDef gpio = {0};
   delay_us_init();
+  crc32_init();
   HAL_GPIO_WritePin(GPIOA, MUX_EN1_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(GPIOB, ADC_CS1_Pin | ADC_CS2_Pin | MUX_EN2_Pin,
                     GPIO_PIN_SET);
@@ -494,15 +642,63 @@ void CombinedAcquisition_Init(void)
     (void)acc_init_one(i);
   }
   last_acc_health_ms = HAL_GetTick();
+  last_acc_sample_ms = HAL_GetTick() - ACC_SAMPLE_INTERVAL_MS;
 }
 
 void CombinedAcquisition_RunOnce(void)
 {
-  uint8_t flags = scan_fsr_both();
+  /* Prime the pipeline with one complete frame before starting the first DMA.
+   * After that, host_send_index is immutable while DMA reads it and the CPU
+   * acquires/packs only into host_fill_index. */
+  if (host_pipeline_primed == 0U)
+  {
+    /* Fill every row once at startup. Steady state then updates one shared MUX
+     * address per output frame, allowing a 700 Hz packet stream while each
+     * complete 16-row matrix refreshes at 700/16 = 43.75 Hz. */
+    uint32_t profile_started = DWT->CYCCNT;
+    uint8_t flags = scan_fsr_rows(FSR_ROWS);
+    profile_fsr_us = elapsed_us_saturated(profile_started);
+    profile_started = DWT->CYCCNT;
+    scan_acc();
+    profile_acc_us = elapsed_us_saturated(profile_started);
+    flags |= 0x0CU; /* ACC present + rolling-scan protocol flag. */
+    profile_started = DWT->CYCCNT;
+    pack_frame(host_tx[host_send_index], flags);
+    profile_pack_us = elapsed_us_saturated(profile_started);
+    host_pipeline_primed = 1U;
+  }
+
+  if (start_frame_dma(host_send_index) != HAL_OK)
+  {
+    HAL_GPIO_WritePin(GPIOB, HOST_IRQ_Pin, GPIO_PIN_RESET);
+    (void)HAL_SPI_Abort(&hspi3);
+    Combined_ReinitializeHostSPI();
+    HAL_Delay(10U);
+    return;
+  }
+
+  /* DMA sends frame N while the CPU acquires and packs frame N+1 into the
+   * other buffer. Cortex-M4 has no data cache, so no cache maintenance is
+   * required before swapping ownership. */
+  uint32_t profile_started = DWT->CYCCNT;
+  uint8_t flags = scan_fsr_rows(FSR_ROWS_PER_OUTPUT_FRAME);
+  profile_fsr_us = elapsed_us_saturated(profile_started);
+  profile_started = DWT->CYCCNT;
   scan_acc();
-  flags |= 0x04U;
-  pack_frame(flags);
-  if (send_frame() != HAL_OK)
+  profile_acc_us = elapsed_us_saturated(profile_started);
+  flags |= 0x0CU;
+  profile_started = DWT->CYCCNT;
+  pack_frame(host_tx[host_fill_index], flags);
+  profile_pack_us = elapsed_us_saturated(profile_started);
+
+  profile_started = DWT->CYCCNT;
+  const HAL_StatusTypeDef status = wait_frame_dma();
+  profile_dma_wait_us = elapsed_us_saturated(profile_started);
+  const uint8_t released_index = host_send_index;
+  host_send_index = host_fill_index;
+  host_fill_index = released_index;
+
+  if (status != HAL_OK)
   {
     HAL_GPIO_WritePin(GPIOB, HOST_IRQ_Pin, GPIO_PIN_RESET);
     (void)HAL_SPI_Abort(&hspi3);

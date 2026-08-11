@@ -78,11 +78,12 @@ the `all` view automatically after upload.
 Expected data source: FSR1 16x16 + FSR2 16x16 + ACC1..ACC9. The frame is
 1188 bytes with `ESK1` magic, sequence, timestamp, status flags, and CRC32.
 Combined mode always scans all nine ACCs; it has no single-ACC flag.
-The current combined Teensy bridge clocks Host SPI at the conservative
-`100 kHz` bring-up value with IRQ/CS/hold waits of `1000/1000/100 us`
-(approximately 95 ms wire time per 1188-byte frame). STM32 ACC SPI2 is
-`500 kHz`, FSR MUX settle is `100 us`, and one ACC identity/repair slot runs
-every `100 ms`. The earlier 1 MHz short-wait trial is not the active setting.
+The current combined Teensy bridge uses hardware Mode-0 SPI at `10 MHz`, with
+IRQ/CS/hold waits of `50/10/10 us` and a `700 frame/s` pacing target. STM32
+SPI1 ADC and SPI2 ACC are both `10 MHz`; FSR MUX settle remains `100 us`.
+One shared FSR MUX address is acquired per packet, giving a measured complete
+16-address refresh of `43.76 Hz`; ACC XYZ is refreshed at `100 Hz`. The STM32
+command builds `Release`, which is the configuration validated at 700 Hz.
 
 ### 2.2 Upload Teensy 4.1
 

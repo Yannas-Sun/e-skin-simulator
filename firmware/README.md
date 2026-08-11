@@ -15,9 +15,19 @@ The complete module contains:
 - Python GUIs for the complete module and standalone FSR tests.
 
 The combined protocol is an integrity-checked 1188-byte `ESK1` frame with
-CRC32. The current Teensy combined bridge uses the conservative verified
-bring-up timing of **100 kHz Host SPI** with IRQ/CS/hold waits of
-**1000/1000/100 us**.
+CRC32. The current bridge uses **10 MHz Teensy hardware Mode-0 SPI**, STM32 SPI3
+full-duplex DMA, two ping-pong frame buffers and a 16-frame Teensy USB queue.
+The accepted output is paced to **700 complete packets/s**.
+
+The combined STM32 firmware is now configured for an **80 MHz SYSCLK/HCLK**
+from the 16 MHz HSI through the PLL. APB1 and APB2 both run at 80 MHz; ADC SPI1
+and ACC SPI2 run at 10 MHz. FSR acquisition is rolling: one shared MUX address
+(32 values across both arrays) is updated per packet, so a complete 16-row
+matrix refresh is approximately 43.76 Hz. ACC samples update at 100 Hz.
+
+Latest report: [`docs/updates/2026-08-10-700hz/PROGRESS_UPDATE.md`](docs/updates/2026-08-10-700hz/PROGRESS_UPDATE.md).
+It records every 700 Hz attempt, the rolling-scan data-freshness semantics and
+the final 60-second hardware acceptance result.
 
 Standalone FSR GUIs display the unmodified 12-bit ADC values (`0..4095`). They
 do not load calibration files or apply normalisation. Historical calibration
@@ -101,3 +111,6 @@ README, and `docs/COMMAND_REFERENCE.md`. `docs/WORKFLOW.md` is chronological;
 older entries deliberately retain the paths and results that were valid when
 the experiment was performed. Files named `README.before_*.md` are archived
 snapshots and are not current operating instructions.
+
+Chronological progress reports are indexed in
+[`docs/updates/README.md`](docs/updates/README.md).
